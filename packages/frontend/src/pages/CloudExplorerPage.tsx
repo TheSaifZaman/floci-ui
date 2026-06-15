@@ -1,11 +1,13 @@
-import {type ElementType, useMemo} from 'react'
-import {Cloud, DatabaseZap, Radio, Route, ShieldCheck} from 'lucide-react'
+import {type ElementType, useMemo, useState} from 'react'
+import {Cloud, DatabaseZap, Info, Radio, Route, ShieldCheck, X} from 'lucide-react'
 import {Navigate, useNavigate, useParams} from 'react-router-dom'
 import {useQuery} from '@tanstack/react-query'
-import {getCloudStatus, listClouds, listCloudServices} from '@/api/cloudProxyClient'
+import {getCloudStatus, getServiceSchema, listClouds, listCloudServices} from '@/api/cloudProxyClient'
 import {CloudSelector} from '@/components/CloudSelector'
 import {DynamicResourceView} from '@/components/DynamicResourceView'
+import {normalizeCapabilities} from '@/lib/capabilities'
 import type {CloudProvider, CloudServiceDescriptor, CloudServiceType, CloudStatus} from '@/types/cloud'
+import type {ServiceSchema} from '@/types/schema'
 
 export function CloudExplorerPage() {
     const navigate = useNavigate()
@@ -14,6 +16,7 @@ export function CloudExplorerPage() {
     const routeService = normalizeService(params.service)
     const cloud = routeCloud ?? 'aws'
     const service = routeService ?? 'storage'
+    const [infoOpen, setInfoOpen] = useState(false)
 
     const cloudsQuery = useQuery({
         queryKey: ['clouds'],
@@ -29,6 +32,10 @@ export function CloudExplorerPage() {
         queryKey: ['cloud-status', cloud],
         queryFn: ({signal}) => getCloudStatus(cloud, signal),
         refetchInterval: 10_000,
+    })
+    const schemaQuery = useQuery({
+        queryKey: ['cloud-schema', cloud, service],
+        queryFn: ({signal}) => getServiceSchema(cloud, service, signal),
     })
 
     const selectedService = useMemo(
@@ -46,11 +53,20 @@ export function CloudExplorerPage() {
                 <div className="page-title">
                     <Cloud size={20}/>
                     <div>
-                        <h2>Cloud Explorer</h2>
+                        <div className="page-title-row">
+                            <h2>Cloud Explorer</h2>
+                            <button className="icon-btn page-info-btn" type="button" onClick={() => setInfoOpen(true)} title="Service information">
+                                <Info size={14}/>
+                            </button>
+                        </div>
                         <p className="muted">Unified local runtime console</p>
                     </div>
                 </div>
                 <div className="cloud-header-selectors">
+                    <label>
+                        <span>Service</span>
+                        <div className="service-selector-readonly">{selectedService?.displayName ?? serviceLabel(service)}</div>
+                    </label>
                     <label>
                         <span>Cloud</span>
                         <CloudSelector
@@ -62,22 +78,12 @@ export function CloudExplorerPage() {
                 </div>
             </div>
             <div className="content cloud-explorer">
-                <div className="cloud-runtime-strip">
-                    <div className="runtime-card">
-                        <DatabaseZap size={16}/>
-                        <div>
-                            <span>Proxy API</span>
-                            <strong>/api/clouds/{cloud}/services/{service}</strong>
-                        </div>
-                    </div>
-                    <RuntimeCard icon={Route} label="Service" value={selectedService?.displayName ?? service} detail={serviceAvailability(selectedService)}/>
+                <div className="cloud-runtime-strip compact">
+                    <RuntimeCard icon={Route} label="Service" value={selectedService?.displayName ?? serviceLabel(service)} detail={serviceAvailability(selectedService)}/>
+                    <RuntimeCard icon={DatabaseZap} label="Proxy API" value={`/api/clouds/${cloud}/services/${service}`} detail="Single entry point"/>
                     <RuntimeCard icon={Radio} label="Runtime" value={runtimeValue(cloud, statusQuery.data)} detail={runtimeDetail(statusQuery.data, statusQuery.isLoading)} state={runtimeState(statusQuery.data, statusQuery.isLoading)}/>
                     <RuntimeCard icon={ShieldCheck} label="Adapter" value={adapterValue(cloud, statusQuery.data)} detail={adapterDetail(statusQuery.data, statusQuery.isLoading)} state={adapterState(cloud, statusQuery.data)}/>
-                    <div className={`runtime-card status ${runtimeState(statusQuery.data, statusQuery.isLoading)}`}>
-                        <span>Connection</span>
-                        <strong>{connectionValue(statusQuery.data, statusQuery.isLoading)}</strong>
-                        <small>{statusQuery.data?.endpoint ?? 'No runtime endpoint'}</small>
-                    </div>
+                    <RuntimeCard icon={Cloud} label="Connection" value={connectionValue(statusQuery.data, statusQuery.isLoading)} detail={statusQuery.data?.endpoint ?? 'No runtime endpoint'} state={runtimeState(statusQuery.data, statusQuery.isLoading)}/>
                 </div>
                 <DynamicResourceView
                     cloud={cloud}
@@ -87,6 +93,17 @@ export function CloudExplorerPage() {
                     statusLoading={statusQuery.isLoading}
                 />
             </div>
+            {infoOpen && (
+                <ServiceInfoDialog
+                    cloud={cloud}
+                    service={service}
+                    descriptor={selectedService}
+                    status={statusQuery.data}
+                    statusLoading={statusQuery.isLoading}
+                    schema={schemaQuery.data}
+                    onClose={() => setInfoOpen(false)}
+                />
+            )}
         </>
     )
 }
@@ -121,6 +138,86 @@ function RuntimeCard({
                 <strong>{value}</strong>
                 <small>{detail}</small>
             </div>
+        </div>
+    )
+}
+
+function ServiceInfoDialog({
+    cloud,
+    service,
+    descriptor,
+    status,
+    statusLoading,
+    schema,
+    onClose,
+}: {
+    cloud: CloudProvider
+    service: CloudServiceType
+    descriptor?: CloudServiceDescriptor
+    status?: CloudStatus
+    statusLoading: boolean
+    schema?: ServiceSchema
+    onClose: () => void
+}) {
+    const capabilityList = schema?.capabilities
+        ? normalizeCapabilities([
+            ...(schema.capabilities.resourceActions ?? []),
+            ...(schema.capabilities.objectActions ?? []),
+        ])
+        : []
+    const capabilityLabels = capabilityList.length
+        ? capabilityList.map((capability) => capability.label).join(', ')
+        : schema?.actions.join(', ') ?? 'Loading actions'
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="service-info-dialog" onClick={(event) => event.stopPropagation()}>
+                <div className="service-info-header">
+                    <div>
+                        <p className="eyebrow">Service Information</p>
+                        <h3>{schema?.displayName ?? descriptor?.displayName ?? serviceLabel(service)}</h3>
+                    </div>
+                    <button className="icon-btn" type="button" onClick={onClose}>
+                        <X size={14}/>
+                    </button>
+                </div>
+                <div className="service-info-grid">
+                    <InfoCard label="Proxy API" value={`/api/clouds/${cloud}/services/${service}`} detail="Single entry point used by the UI"/>
+                    <InfoCard label="Service" value={descriptor?.displayName ?? serviceLabel(service)} detail={serviceAvailability(descriptor)}/>
+                    <InfoCard label="Runtime" value={runtimeValue(cloud, status)} detail={runtimeDetail(status, statusLoading)} state={runtimeState(status, statusLoading)}/>
+                    <InfoCard label="Adapter" value={adapterValue(cloud, status)} detail={adapterDetail(status, statusLoading)} state={adapterState(cloud, status)}/>
+                    <InfoCard label="Connection" value={connectionValue(status, statusLoading)} detail={status?.endpoint ?? 'No runtime endpoint'} state={runtimeState(status, statusLoading)}/>
+                    <InfoCard label="Normalized Contract" value={schema?.columns.length ? `${schema.columns.length} columns` : 'Loading schema'} detail="Shared table and resource inspector"/>
+                </div>
+                <div className="service-info-section">
+                    <p className="eyebrow">Supported Actions</p>
+                    <p className="service-info-copy">{capabilityLabels}</p>
+                </div>
+                <div className="service-info-section">
+                    <p className="eyebrow">Current Limitations</p>
+                    <p className="service-info-copy">{limitationCopy(cloud, service)}</p>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function InfoCard({
+    label,
+    value,
+    detail,
+    state,
+}: {
+    label: string
+    value: string
+    detail: string
+    state?: 'ready' | 'pending' | 'unavailable'
+}) {
+    return (
+        <div className={`service-info-card ${state ?? ''}`}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{detail}</small>
         </div>
     )
 }
@@ -173,4 +270,19 @@ function connectionValue(status?: CloudStatus, loading?: boolean): string {
     if (status.runtime === 'reachable') return 'Connected'
     if (status.runtime === 'unavailable') return 'Not connected'
     return 'Coming soon'
+}
+
+function serviceLabel(service: CloudServiceType): string {
+    if (service === 'k8s') return 'k8s Engine'
+    if (service === 'serverless') return 'Serverless'
+    return service.charAt(0).toUpperCase() + service.slice(1)
+}
+
+function limitationCopy(cloud: CloudProvider, service: CloudServiceType): string {
+    if (cloud === 'aws' && service === 'storage') return 'Advanced S3 workflows such as bulk actions, version browsing, and richer object lifecycle controls still live outside the normalized surface.'
+    if (cloud === 'azure' && service === 'storage') return 'Blob Storage is wired through the normalized contract, but advanced metadata, tags, and access-policy workflows are still limited.'
+    if (cloud === 'azure' && service === 'database') return 'Cosmos DB uses a richer panel below for databases, containers, items, and SQL queries; a fully normalized database model is still evolving.'
+    if (cloud === 'aws' && service === 'compute') return 'Compute workflows still rely on AWS-specific forms for dependent infrastructure choices such as VPC, subnet, and security group.'
+    if (cloud === 'aws' && service === 'networking') return 'Networking uses AWS-specific operational panels because many actions require nested workflows instead of a flat generic form.'
+    return 'This service is available through the current adapter, but the normalized contract is still expanding.'
 }

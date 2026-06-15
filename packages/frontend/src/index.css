@@ -410,11 +410,22 @@ pre,
     gap: 8px;
 }
 
+.page-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .page-title h2 {
     margin: 0;
     color: var(--text);
     font-size: 20px;
     font-weight: 400;
+}
+
+.page-info-btn {
+    width: 24px;
+    height: 24px;
 }
 
 .info-link {
@@ -757,6 +768,20 @@ pre,
     text-transform: uppercase;
 }
 
+.service-selector-readonly {
+    min-width: 164px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--raised);
+    color: var(--text-bright);
+    font-size: 12px;
+    font-weight: 500;
+}
+
 .cloud-explorer {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
@@ -774,6 +799,10 @@ pre,
     overflow: hidden;
 }
 
+.cloud-runtime-strip.compact {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .runtime-card {
     min-height: 38px;
     display: flex;
@@ -781,6 +810,12 @@ pre,
     gap: 10px;
     border-right: 1px solid var(--border);
     padding: 7px 10px;
+}
+
+.cloud-runtime-strip.compact .runtime-card {
+    min-height: 28px;
+    gap: 8px;
+    padding: 8px 10px;
 }
 
 .runtime-card:last-child {
@@ -818,6 +853,101 @@ pre,
     line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.cloud-runtime-strip.compact strong {
+    font-size: 11px;
+}
+
+.cloud-runtime-strip.compact small {
+    font-size: 10px;
+}
+
+.service-info-dialog {
+    width: min(880px, calc(100vw - 48px));
+    max-height: calc(100vh - 64px);
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.service-info-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.service-info-header h3 {
+    margin: 4px 0 0;
+    color: var(--text-bright);
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.service-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px 20px;
+}
+
+.service-info-card {
+    display: grid;
+    gap: 6px;
+    min-height: 92px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--elevated);
+}
+
+.service-info-card span {
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.service-info-card strong {
+    color: var(--text-bright);
+    font-size: 14px;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.service-info-card small {
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.service-info-card.ready {
+    border-color: rgba(74, 222, 128, 0.28);
+}
+
+.service-info-card.pending {
+    border-color: rgba(245, 158, 11, 0.28);
+}
+
+.service-info-card.unavailable {
+    border-color: rgba(239, 68, 68, 0.28);
+}
+
+.service-info-section {
+    padding: 0 20px 18px;
+}
+
+.service-info-copy {
+    margin: 8px 0 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.6;
 }
 
 .runtime-card.ready svg,
@@ -2332,6 +2462,10 @@ button.console-service-card {
     .cloud-runtime-strip,
     .resource-workbench,
     .cloud-coming-soon {
+        grid-template-columns: 1fr;
+    }
+
+    .service-info-grid {
         grid-template-columns: 1fr;
     }
 
