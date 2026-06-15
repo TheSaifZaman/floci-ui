@@ -1,0 +1,101 @@
+name: Integration
+
+# Verifies the project compiles, then runs an end-to-end integration test of
+# the full stack (UI + API + the real floci/floci runtime image) via Docker
+# Compose, asserting the API can reach the runtime and list real resources.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Compilation check ────────────────────────────────────────────────────
+  build:
+    name: Compile (type-check + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.2.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1'
+
+      - name: Install API dependencies
+        working-directory: packages/api
+        run: bun install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm type-check
+
+      - name: Build
+        run: pnpm build
+
+  # ── Integration test against the real Floci image ────────────────────────
+  integration:
+    name: Integration (real Floci image)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Start stack (UI + API + floci/floci)
+        run: docker compose up -d --build
+
+      - name: Wait for the Floci runtime to be reachable
+        run: |
+          for i in $(seq 1 40); do
+            body=$(curl -fsS --max-time 5 http://localhost:4501/api/clouds/aws/status 2>/dev/null || true)
+            echo "[$i] $body"
+            if echo "$body" | grep -q '"runtime":"reachable"'; then
+              echo "Runtime reachable."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::Floci runtime did not become reachable in time"
+          exit 1
+
+      - name: Assert storage resources are listed (S3 via the real runtime)
+        run: |
+          code=$(curl -s -o /tmp/resources.json -w '%{http_code}' --max-time 10 \
+            "http://localhost:4501/api/clouds/aws/services/storage/resources")
+          echo "HTTP $code"; cat /tmp/resources.json; echo
+          test "$code" = "200"
+          jq -e 'type == "array"' /tmp/resources.json > /dev/null
+
+      - name: Assert the UI is served
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:4500/)
+          echo "UI HTTP $code"
+          test "$code" = "200"
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --no-color | tail -300
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
