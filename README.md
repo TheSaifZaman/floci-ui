@@ -515,10 +515,10 @@ the local default is `FLOCI_AZURE_ACCOUNT_NAME=devstoreaccount1`.
 For local development, the UI needs all three of these components running:
 
 1. Floci core on `http://localhost:4566`.
-2. The Floci UI API backend on `http://localhost:4501` via `pnpm dev:api`.
-3. The frontend dev server on `http://localhost:4500` via `pnpm dev`.
+2. The Floci UI API backend on `http://localhost:4501`.
+3. The frontend dev server on `http://localhost:4500`.
 
-The frontend expects `/api/*` endpoints from `packages/api`, so running only `pnpm dev` is not enough.
+The default root dev command now starts the API and frontend together.
 
 ### 2. Install Floci UI dependencies
 
@@ -547,25 +547,32 @@ PORT=4501
 
 `.env.example` already includes `VITE_MOCK_MODE=false` for real Floci usage.
 
-### 4. Start the local API
+### 4. Start local development
 
 Terminal 2:
-
-```bash
-pnpm dev:api
-```
-
-This starts `packages/api` on `http://localhost:4501` and points AWS SDK clients at `FLOCI_ENDPOINT`.
-
-### 5. Start the frontend
-
-Terminal 3:
 
 ```bash
 pnpm dev
 ```
 
-Open the UI:
+This starts:
+
+- `packages/api` on `http://localhost:4501`
+- `packages/frontend` on `http://localhost:4500`
+
+If you only want the frontend:
+
+```bash
+pnpm dev:web
+```
+
+If you only want the API:
+
+```bash
+pnpm dev:api
+```
+
+### 5. Open the UI
 
 ```text
 http://127.0.0.1:4500/
@@ -627,7 +634,7 @@ cp .env packages/api/.env
 Then restart the API server:
 
 ```bash
-pnpm dev:api
+pnpm dev
 ```
 
 #### 3. Verify connectivity

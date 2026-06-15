@@ -7,12 +7,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "pnpm --filter @floci/frontend dev",
+    "dev": "sh -c 'PORT=4501 pnpm dev:api & pnpm dev:web'",
+    "dev:web": "pnpm --filter @floci/frontend dev",
     "build": "pnpm --filter @floci/frontend build",
     "lint": "pnpm --filter @floci/frontend lint",
     "type-check": "pnpm --filter @floci/api type-check && pnpm --filter @floci/frontend type-check",
     "test": "pnpm --filter @floci/api test",
-    "dev:api": "pnpm --filter @floci/api dev",
-    "start:api": "pnpm --filter @floci/api start"
+    "dev:api": "sh -c 'PORT=${PORT:-4501} pnpm --filter @floci/api dev'",
+    "start:api": "sh -c 'PORT=${PORT:-4501} pnpm --filter @floci/api start'"
   }
 }
