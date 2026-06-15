@@ -61,6 +61,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
 
+      # data/ is gitignored, so on a fresh runner Docker would create the
+      # ./data bind-mount as root and the Floci runtime (uid 1001) can't write
+      # to it. Pre-create it world-writable so persistent storage works.
+      - name: Prepare writable storage dir for the Floci runtime
+        run: mkdir -p data && chmod -R 777 data
+
       - name: Start stack (UI + API + floci/floci)
         run: docker compose up -d --build
 
