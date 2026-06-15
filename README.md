@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="floci-black.svg#gh-light-mode-only" alt="Floci UI" width="460" />
-  <img src="floci-white.svg#gh-dark-mode-only" alt="Floci UI" width="460" />
+  <img src="docs/images/floci-black.svg#gh-light-mode-only" alt="Floci UI" width="460" />
+  <img src="docs/images/floci-white.svg#gh-dark-mode-only" alt="Floci UI" width="460" />
 </p>
 
 <p align="center">
