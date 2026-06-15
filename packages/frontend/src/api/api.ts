@@ -73,6 +73,18 @@ export const apiEndpointKeys = {
         create: "aws.rds.snapshots.create",
       },
     },
+    secretsmanager: {
+      secrets: {
+        list: "aws.secretsmanager.secrets.list",
+        create: "aws.secretsmanager.secrets.create",
+        describe: "aws.secretsmanager.secrets.describe",
+        delete: "aws.secretsmanager.secrets.delete",
+        value: {
+          get: "aws.secretsmanager.secrets.value.get",
+          put: "aws.secretsmanager.secrets.value.put",
+        },
+      },
+    },
     ec2: {
       instances: {
         list: "aws.ec2.instances.list",
@@ -430,6 +442,56 @@ export const endpointRegistry: EndpointRegistry = new Map([
       path: "/rds/snapshots",
       method: "POST",
       telemetry: { provider: "aws", service: "rds" },
+    },
+  ],
+
+  // AWS Secrets Manager
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.list,
+    {
+      path: "/secretsmanager/secrets",
+      method: "GET",
+      telemetry: { provider: "aws", service: "secretsmanager" },
+    },
+  ],
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.create,
+    {
+      path: "/secretsmanager/secrets",
+      method: "POST",
+      telemetry: { provider: "aws", service: "secretsmanager" },
+    },
+  ],
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.describe,
+    {
+      path: "/secretsmanager/secret",
+      method: "GET",
+      telemetry: { provider: "aws", service: "secretsmanager" },
+    },
+  ],
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.delete,
+    {
+      path: "/secretsmanager/secret",
+      method: "DELETE",
+      telemetry: { provider: "aws", service: "secretsmanager" },
+    },
+  ],
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.value.get,
+    {
+      path: "/secretsmanager/secret/value",
+      method: "GET",
+      telemetry: { provider: "aws", service: "secretsmanager" },
+    },
+  ],
+  [
+    apiEndpointKeys.aws.secretsmanager.secrets.value.put,
+    {
+      path: "/secretsmanager/secret/value",
+      method: "PUT",
+      telemetry: { provider: "aws", service: "secretsmanager" },
     },
   ],
 

@@ -1,11 +1,12 @@
 import {useMemo} from 'react'
-import {Cpu, Database, MessageSquare, Table2, Zap} from 'lucide-react'
+import {Cpu, Database, KeyRound, MessageSquare, Table2, Zap} from 'lucide-react'
 import {
     useCloudConsoleResourcesQuery,
     useCloudsQuery,
     useCloudServicesQuery,
     useCloudStatusQuery,
 } from './cloudConsoleHome.queries'
+import {useSecretsQuery} from '@/api/aws/secretsmanager.queries'
 import {
     activeServicesDetailFor,
     resourceDetailFor,
@@ -27,16 +28,16 @@ export function useCloudConsoleHomeData(cloud: CloudProvider) {
     const cloudsQuery = useCloudsQuery()
     const servicesQuery = useCloudServicesQuery(cloud)
     const statusQuery = useCloudStatusQuery(cloud)
+    const status = statusQuery.data
     const queryContext = {
         cloud,
         services: servicesQuery.data,
-        status: statusQuery.data,
+        status,
     }
     const storageResourcesQuery = useCloudConsoleResourcesQuery({...queryContext, service: 'storage'})
     const k8sResourcesQuery = useCloudConsoleResourcesQuery({...queryContext, service: 'k8s'})
     const databaseResourcesQuery = useCloudConsoleResourcesQuery({...queryContext, service: 'database'})
-
-    const status = statusQuery.data
+    const secretsQuery = useSecretsQuery(cloud === 'aws' && status?.runtime === 'reachable')
     const serviceCards = useMemo<ConsoleServiceCard[]>(() => {
         const storage = servicesQuery.data?.find((service) => service.service === 'storage')
         const k8s = servicesQuery.data?.find((service) => service.service === 'k8s')
@@ -70,6 +71,15 @@ export function useCloudConsoleHomeData(cloud: CloudProvider) {
                 route: `/cloud-explorer/${cloud}/database`,
                 meta: serviceMetaLabel(status, databaseResourcesQuery.isLoading, 'instances'),
             },
+            ...(cloud === 'aws' ? [{
+                id: 'secretsmanager',
+                label: 'Secrets Manager',
+                status: 'available' as const,
+                count: secretsQuery.data?.length,
+                icon: KeyRound,
+                route: '/secretsmanager',
+                meta: serviceMetaLabel(status, secretsQuery.isLoading, 'secrets'),
+            }] : []),
             ...SERVICE_PLACEHOLDERS.map((service) => ({
                 ...service,
                 status: 'coming_soon' as const,
@@ -79,19 +89,27 @@ export function useCloudConsoleHomeData(cloud: CloudProvider) {
             })),
         ]
     }, [
-        cloud,
         databaseResourcesQuery.data,
         databaseResourcesQuery.isLoading,
+        cloud,
         k8sResourcesQuery.data,
         k8sResourcesQuery.isLoading,
+        secretsQuery.data,
+        secretsQuery.isLoading,
         servicesQuery.data,
         status,
         storageResourcesQuery.data,
         storageResourcesQuery.isLoading,
     ])
 
-    const resourcesLoading = storageResourcesQuery.isLoading || k8sResourcesQuery.isLoading || databaseResourcesQuery.isLoading
-    const resourcesError = storageResourcesQuery.isError || k8sResourcesQuery.isError || databaseResourcesQuery.isError
+    const resourcesLoading = storageResourcesQuery.isLoading
+        || k8sResourcesQuery.isLoading
+        || databaseResourcesQuery.isLoading
+        || (cloud === 'aws' && secretsQuery.isLoading)
+    const resourcesError = storageResourcesQuery.isError
+        || k8sResourcesQuery.isError
+        || databaseResourcesQuery.isError
+        || (cloud === 'aws' && secretsQuery.isError)
 
     return {
         cloudsQuery,
@@ -104,7 +122,8 @@ export function useCloudConsoleHomeData(cloud: CloudProvider) {
         activeServicesDetail: activeServicesDetailFor(cloud),
         resourceCount: (storageResourcesQuery.data?.length ?? 0)
             + (k8sResourcesQuery.data?.length ?? 0)
-            + (databaseResourcesQuery.data?.length ?? 0),
+            + (databaseResourcesQuery.data?.length ?? 0)
+            + (cloud === 'aws' ? (secretsQuery.data?.length ?? 0) : 0),
         resourceDetail: resourceDetailFor(cloud, status, statusQuery.isLoading, resourcesLoading, resourcesError),
         serviceCards,
     }

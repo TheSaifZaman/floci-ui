@@ -3,6 +3,7 @@ import { LambdaClient } from "@aws-sdk/client-lambda";
 import { EKSClient } from "@aws-sdk/client-eks";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { RDSClient } from "@aws-sdk/client-rds";
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 const endpoint = process.env.FLOCI_ENDPOINT;
 const region = process.env.AWS_REGION || "us-east-1";
 const credentials = {
@@ -21,6 +22,7 @@ export const awsClients = {
   eks: new EKSClient(base),
   ec2: new EC2Client(base),
   rds: new RDSClient(base),
+  secretsManager: new SecretsManagerClient(base),
 } as const;
 
 export type AwsClientName = keyof typeof awsClients;
@@ -30,3 +32,4 @@ export const lambda = awsClients.lambda;
 export const eks = awsClients.eks;
 export const ec2 = awsClients.ec2;
 export const rds = awsClients.rds;
+export const secretsManager = awsClients.secretsManager;

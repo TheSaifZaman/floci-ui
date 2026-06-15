@@ -188,8 +188,8 @@ Current limitations:
 ## Current Cloud Service Status
 
 These percentages describe UI coverage in the current frontend, grouped by the `Cloud Services` navigation model. They
-do not describe backend completeness. Dedicated AWS pages have been removed; active work now belongs in the
-Cloud Explorer and its proxy/adapters.
+do not describe backend completeness. Most dedicated AWS pages have been removed in favor of the Cloud Explorer and
+its proxy/adapters.
 
 | Category | AWS | Azure | GCP | Current UI status |
 |---|---:|---:|---:|---|
@@ -202,7 +202,7 @@ Cloud Explorer and its proxy/adapters.
 | Function | Coming soon | Coming soon | Coming soon | No unified function adapter is currently exposed in the UI. AWS Lambda legacy UI was removed and should be rebuilt through Cloud Explorer contracts. |
 | Events | Coming soon | Coming soon | Coming soon | No unified events adapter is currently exposed in the UI. AWS SNS legacy UI was removed and should be rebuilt through Cloud Explorer contracts. |
 | Observability | Coming soon | Coming soon | Coming soon | No unified observability adapter is currently exposed in the UI. AWS CloudWatch legacy UI and request ingestion were removed from the frontend/backend legacy surface. |
-| Security / Identity | Placeholder | Placeholder | Placeholder | IAM, KMS, Secrets Manager, Cognito, and related services remain placeholders in the UI. |
+| Security / Identity | 80% (Secrets Manager) | Coming soon | Coming soon | AWS Secrets Manager has a dedicated page for listing secrets, inspecting metadata, revealing/editing values, creating, and deleting. IAM, KMS, Cognito, and Systems Manager remain placeholders in the UI. |
 
 Connected Cloud Explorer categories today:
 
@@ -212,11 +212,15 @@ Connected Cloud Explorer categories today:
 - k8s Engine: AWS EKS.
 - Database: AWS RDS and Azure Cosmos DB NoSQL.
 
+Dedicated AWS-specific pages today:
+
+- Secrets Manager
+
 Placeholder or not-yet-normalized categories today:
 
 - Azure Compute, Networking, k8s, Database, Queue, Function, Events, Observability.
 - GCP all categories.
-- IAM, KMS, Secrets Manager, Cognito, Systems Manager, ElastiCache.
+- IAM, KMS, Cognito, Systems Manager, ElastiCache.
 
 ## Category Detail
 
@@ -419,11 +423,28 @@ Current status:
 
 - IAM is a placeholder.
 - KMS is a placeholder.
-- Secrets Manager is a placeholder.
+- Secrets Manager has a dedicated AWS-specific page.
 - Cognito is a placeholder.
 - Systems Manager is a placeholder.
 
-These categories are intentionally visible so users can see the intended console shape, but they should not show fake
+AWS Secrets Manager support:
+
+- Entry point: `/secretsmanager`.
+- List secrets with name, description, last-changed time, and tag count.
+- Inspect secret metadata: ARN, description, KMS key, rotation state, version ids, timestamps, and tags.
+- Reveal the current secret value on demand, with copy to clipboard. Values stay hidden until explicitly requested.
+- Create a secret with a plaintext or JSON value.
+- Update the value, which stores a new version.
+- Delete a secret, with an optional force delete that skips the 7-day recovery window.
+
+Verification: the operations above were exercised end-to-end through the UI against the bundled Floci runtime
+(`floci/floci:latest-compat` on `:4566`, started via `docker compose -f docker-compose.dev.yml up`): create, list,
+describe, reveal, update (new version id issued), and force delete all succeeded with `200` responses. `GET
+/secret/value` returns `Cache-Control: no-store`, and requests with a missing id or a malformed JSON body return `400`.
+Route behaviour is additionally covered by unit tests in `packages/api/src/routes/secretsmanager.test.ts` (AWS client
+stubbed).
+
+Remaining placeholders are intentionally visible so users can see the intended console shape, but they do not show fake
 resources or demo data.
 
 </details>

@@ -2,6 +2,7 @@ import {NavLink, Outlet, useLocation} from 'react-router-dom'
 import {
     Database,
     Boxes,
+    KeyRound,
     LayoutDashboard,
     MessageSquare,
     Moon,
@@ -31,6 +32,7 @@ function NavItem({to, icon, label}: { to: string; icon: React.ElementType; label
 const CLOUD_SERVICE_ICONS = {
     storage: Database,
     k8s: Boxes,
+    secretsmanager: KeyRound,
     queue: MessageSquare,
     function: Zap,
     database: Table2,
@@ -47,6 +49,7 @@ const CLOUD_SERVICE_ITEMS: Array<{name: CloudSidebarService; label: string; rout
     {name: 'database', label: 'Database', route: 'database'},
     {name: 'compute', label: 'Compute', route: 'compute'},
     {name: 'networking', label: 'Networking', route: 'networking'},
+    {name: 'secretsmanager', label: 'Secrets Manager', route: '/secretsmanager'},
     {name: 'serverless', label: 'Serverless', route: 'serverless'},
     {name: 'queue', label: 'Queue'},
     {name: 'function', label: 'Function'},
@@ -63,10 +66,12 @@ function CloudServiceNav() {
             {CLOUD_SERVICE_ITEMS.map((service) => {
                 const Icon = CLOUD_SERVICE_ICONS[service.name]
                 const available = service.name === 'storage'
+                    || (service.name === 'secretsmanager' && cloud === 'aws')
                     || (service.name === 'database' && (cloud === 'aws' || cloud === 'azure'))
                     || ((service.name === 'k8s' || service.name === 'compute' || service.name === 'networking' || service.name === 'serverless') && cloud === 'aws')
                 if (service.route && available) {
-                    return <NavItem key={service.name} to={`/cloud-explorer/${cloud}/${service.route}`} icon={Icon} label={service.label}/>
+                    const target = service.route.startsWith('/') ? service.route : `/cloud-explorer/${cloud}/${service.route}`
+                    return <NavItem key={service.name} to={target} icon={Icon} label={service.label}/>
                 }
 
                 return (

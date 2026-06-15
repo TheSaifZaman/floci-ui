@@ -25,7 +25,7 @@ export function runtimeDetailFor(cloud: CloudProvider, status?: CloudStatus): st
 }
 
 export function activeServicesDetailFor(cloud: CloudProvider): string {
-    if (cloud === 'aws') return 'Storage, k8s Engine, and Database are wired'
+    if (cloud === 'aws') return 'Storage, k8s Engine, Database, and Secrets Manager are wired'
     if (cloud === 'gcp') return 'Storage is wired through Floci-GCP'
     return 'Storage only for this multi-cloud pass'
 }
@@ -42,7 +42,7 @@ export function resourceDetailFor(
     if (status?.runtime === 'coming_soon') return 'No adapter registered yet'
     if (resourcesLoading) return 'Loading normalized resources'
     if (resourcesError) return 'Resource load failed'
-    if (cloud === 'aws') return 'Storage, k8s Engine, and Database resources'
+    if (cloud === 'aws') return 'Storage, k8s Engine, Database, and Secrets Manager resources'
     if (cloud === 'gcp') return 'Cloud Storage resources'
     return 'Normalized storage resources'
 }
@@ -61,7 +61,7 @@ export function cloudName(cloud: CloudProvider): string {
 }
 
 export function providerDescription(cloud: CloudProvider): string {
-    if (cloud === 'aws') return 'Storage is backed by Floci AWS Core through the unified Cloud Proxy API.'
+    if (cloud === 'aws') return 'Storage, runtime infrastructure, and AWS-specific pages are backed by Floci AWS Core.'
     if (cloud === 'azure') return 'Storage is backed by Floci-AZ through the same normalized storage contract.'
     return 'Storage is backed by Floci-GCP through the same normalized storage contract.'
 }
