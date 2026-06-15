@@ -7,10 +7,11 @@ export const secretsManagerQueryKeys = {
   value: (id: string | null) => ["secretsmanager", "value", id] as const,
 };
 
-export function useSecretsQuery() {
+export function useSecretsQuery(enabled = true) {
   return useQuery({
     queryKey: secretsManagerQueryKeys.list,
     queryFn: ({ signal }) => secretsManagerClient.listSecrets(signal),
+    enabled,
   });
 }
 
