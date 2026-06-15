@@ -360,7 +360,7 @@ export class HttpClient {
     url: string,
   ): Promise<HttpError> {
     const text = await response.text();
-    let body: unknown = text;
+    let body: unknown;
 
     if (text.trim()) {
       try {

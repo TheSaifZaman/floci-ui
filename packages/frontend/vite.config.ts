@@ -12,13 +12,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          "react-vendor": ["react", "react-dom", "react-router-dom"],
-          "query-vendor": [
-            "@tanstack/react-query",
-            "@tanstack/react-query-devtools",
-          ],
-          "ui-vendor": ["lucide-react"],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (/[\\/]react-router/.test(id)) return "react-vendor";
+          if (/[\\/]react(-dom)?[\\/]/.test(id)) return "react-vendor";
+          if (/[\\/]@tanstack[\\/]/.test(id)) return "query-vendor";
+          if (/[\\/]lucide-react[\\/]/.test(id)) return "ui-vendor";
         },
       },
     },
