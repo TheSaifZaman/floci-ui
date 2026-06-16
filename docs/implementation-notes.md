@@ -1,30 +1,54 @@
 # Implementation Notes
 
+This document tracks the current architectural direction behind the new Floci UI shell.
+
 ## What Changed
 
-- Added the first unified Cloud Proxy API under `/api/clouds`.
-- Added SPI contracts for clouds, services, schemas, fields, actions, table columns, resource queries, and normalized resources.
-- Added a `CloudAdapterRegistry` to resolve a cloud/service pair to a concrete adapter.
-- Added AWS Storage Adapter for S3 buckets using the existing Floci AWS Core S3 client.
-- Added Azure Storage Adapter for Blob containers using `FLOCI_AZURE_ENDPOINT`.
-- Added dynamic frontend types and components for cloud selection, service selection, schema-driven creation forms, normalized resource tables, and resource inspection.
-- Added `CloudExplorerPage` at `/cloud-explorer`.
-- Added GCP only as a coming-soon placeholder.
-- Updated README with the new multi-cloud direction, architecture principles, initial scope, future scope, and architecture image.
-- Added basic tests for adapter registry behavior and schema route behavior.
+- Introduced the Cloud Proxy API under `/api/clouds/*`.
+- Added shared SPI contracts in `packages/api/src/cloud-spi`.
+- Added the `CloudAdapterRegistry` to resolve cloud + service pairs.
+- Moved the main UX toward `Console Home` and `Cloud Explorer`.
+- Kept `Secrets Manager` as a dedicated AWS page during the transition.
 
-## Current Scope
+## Adapters Currently Registered
 
-- AWS S3 buckets are exposed as normalized `storage` resources with type `bucket`.
-- Azure Blob containers are exposed as normalized `storage` resources with type `container`.
-- The dynamic UI renders only the metadata exposed by the Cloud Proxy API.
+- AWS Storage
+- AWS k8s
+- AWS Database
+- AWS Compute
+- AWS Networking
+- AWS Serverless
+- Azure Storage
+- Azure Database
+- Azure Serverless
+- GCP Storage
 
-## Pending
+## Current UI Surface
 
-- Add real Floci-AZ lifecycle documentation once the runtime setup is finalized.
-- Add object/blob-level browsing to the unified storage view.
-- Add update/tag/versioning actions to the unified storage contract.
-- Add adapter capability flags for partially supported runtimes.
-- Add route-level error normalization for adapter failures.
-- Add visual regression or browser smoke tests for `/cloud-explorer`.
-- Add future adapters through the SPI without changing the UI contract.
+The frontend currently exposes:
+
+- `Console Home`
+- `Cloud Explorer / storage`
+- `Cloud Explorer / k8s`
+- `Cloud Explorer / database`
+- `Cloud Explorer / compute`
+- `Cloud Explorer / networking`
+- `Cloud Explorer / serverless`
+- `/secretsmanager`
+
+Not every registered adapter is already promoted into the visible sidebar for every provider. The README reflects the user-visible surface, not only what is registered in the backend.
+
+## Active Transitional State
+
+The codebase is in a hybrid stage:
+
+- Unified shell and metadata-driven proxy are the default direction.
+- Some AWS workflows still depend on provider-specific panels inside the new shell.
+- `Secrets Manager` remains outside Cloud Explorer for now.
+- Old AWS legacy pages were intentionally removed instead of being carried forward.
+
+## Next Cleanup Targets
+
+- Move remaining dedicated AWS workflows into Cloud Explorer where practical.
+- Keep provider-neutral contracts ahead of new provider-specific UI.
+- Continue reducing README drift whenever the visible navigation changes.
