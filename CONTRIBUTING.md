@@ -148,6 +148,23 @@ wip: still working on this           # "wip" is not a recognised type
 Do not include `Co-Authored-By` trailers for AI tools in commit messages. Attribution
 should be limited to human contributors.
 
+## Architecture & Agent Instructions
+
+See [AGENTS.md](AGENTS.md) for a detailed description of the architecture (frontend →
+`/api/*` → Cloud Proxy → adapters), the schema-driven multi-cloud model, and the canonical
+pattern for adding a new service to the Cloud Explorer.
+
+`AGENTS.md` is the canonical agent-instructions file for this repository, following the
+[AGENTS.md standard](https://agents.md/). The agent-specific filenames are symlinks to it,
+so there is a single source of truth. If your coding agent expects a different filename,
+create a local symlink to `AGENTS.md` instead of copying the file:
+
+```bash
+ln -s AGENTS.md CLAUDE.md
+ln -s AGENTS.md GEMINI.md
+ln -s ../AGENTS.md .github/copilot-instructions.md
+```
+
 ## Adding a New Service UI
 
 When wiring a new service into the console, follow these rules:
