@@ -6,9 +6,17 @@ name: Integration
 
 on:
   pull_request:
+    paths:
+      - 'packages/**'
+      - 'package.json'
+      - 'docker-compose.yml'
   push:
     branches:
       - main
+    paths:
+      - 'packages/**'
+      - 'package.json'
+      - 'docker-compose.yml'
 
 permissions:
   contents: read
