@@ -1514,7 +1514,7 @@ export function NetworkingPanel({cloud, resource, runtimeReachable}: NetworkingP
         if (resource?.type === 'vpc') {
             setSelected({section: 'vpc', id: resource.id})
         }
-    }, [resource?.id])
+    }, [resource?.id, resource?.type])
 
     // ── Data queries ──────────────────────────────────────────────────────────
 
@@ -1526,30 +1526,6 @@ export function NetworkingPanel({cloud, resource, runtimeReachable}: NetworkingP
     const rtbsQ   = useQuery({queryKey: ['ec2', 'route-tables'],       queryFn: ({signal}) => listEc2RouteTables(undefined, signal),    enabled: cloud === 'aws' && !!runtimeReachable})
     const eipsQ   = useQuery({queryKey: ['ec2', 'eips'],               queryFn: ({signal}) => listEc2ElasticIps(signal),               enabled: cloud === 'aws' && !!runtimeReachable})
     const instsQ  = useQuery({queryKey: ['ec2', 'instances'],          queryFn: ({signal}) => listEc2Instances(signal),                 enabled: cloud === 'aws' && !!runtimeReachable})
-
-    if (cloud !== 'aws') {
-        return (
-            <div className="widget" style={{marginTop: 16}}>
-                <div className="widget-header"><Network size={14}/><h3 style={{marginLeft: 6}}>Networking</h3></div>
-                <div className="widget-body">
-                    <p style={{fontSize: 12, color: 'var(--text-2)'}}>Networking management coming soon for {cloud.toUpperCase()}.</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (!runtimeReachable) return null
-
-    const sgs     = sgsQ.data    ?? []
-    const kps     = kpsQ.data    ?? []
-    const vpcs    = vpcsQ.data   ?? []
-    const subnets = subnetsQ.data ?? []
-    const igws    = igwsQ.data   ?? []
-    const rtbs    = rtbsQ.data   ?? []
-    const eips    = eipsQ.data   ?? []
-    const insts   = instsQ.data  ?? []
-
-    const instList = insts.map((i) => ({instanceId: i.instanceId, name: i.name}))
 
     // ── Delete mutations ──────────────────────────────────────────────────────
 
@@ -1581,6 +1557,30 @@ export function NetworkingPanel({cloud, resource, runtimeReachable}: NetworkingP
         mutationFn: (id: string) => releaseEc2ElasticIp(id),
         onSuccess: (_, id) => {if (selected?.id === id) setSelected(null); void qc.invalidateQueries({queryKey: ['ec2', 'eips']})},
     })
+
+    if (cloud !== 'aws') {
+        return (
+            <div className="widget" style={{marginTop: 16}}>
+                <div className="widget-header"><Network size={14}/><h3 style={{marginLeft: 6}}>Networking</h3></div>
+                <div className="widget-body">
+                    <p style={{fontSize: 12, color: 'var(--text-2)'}}>Networking management coming soon for {cloud.toUpperCase()}.</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (!runtimeReachable) return null
+
+    const sgs     = sgsQ.data    ?? []
+    const kps     = kpsQ.data    ?? []
+    const vpcs    = vpcsQ.data   ?? []
+    const subnets = subnetsQ.data ?? []
+    const igws    = igwsQ.data   ?? []
+    const rtbs    = rtbsQ.data   ?? []
+    const eips    = eipsQ.data   ?? []
+    const insts   = instsQ.data  ?? []
+
+    const instList = insts.map((i) => ({instanceId: i.instanceId, name: i.name}))
 
     // ── Resolve selected detail ───────────────────────────────────────────────
 
