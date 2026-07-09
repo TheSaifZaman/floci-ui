@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Info, Plus, RefreshCw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -328,7 +328,10 @@ export function DynamicResourceView({
 }
 
 function TopbarServiceInfo({ onOpenInfo }: { onOpenInfo: () => void }) {
-  const slot = document.getElementById("topbar-status");
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setSlot(document.getElementById("topbar-status"));
+  }, []);
   if (!slot) return null;
   return createPortal(
     <button
