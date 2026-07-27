@@ -1,5 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import {Hono} from 'hono'
+import {NotImplementedByRuntimeError, RuntimeUnavailableError, ValidationError} from '../cloud-spi/errors'
 import {azureDatabaseSchema} from '../cloud-spi/databaseSchema'
 import {awsStorageSchema, azureStorageSchema} from '../cloud-spi/storageSchema'
 import type {CloudResource, CloudServiceAdapter, CosmosContainer, CosmosItem, CosmosQueryResult, CreateResourceInput} from '../cloud-spi/types'
@@ -127,14 +128,25 @@ describe('cloud schema routes', () => {
     })
 
     test('returns GCP runtime status without a registered adapter', async () => {
-        const res = await appWithRoutes().request('/api/clouds/gcp/status')
-        const body = await res.json()
+        // The GCP probe is a real HTTP call, so stub fetch rather than depending on
+        // whether a floci-gcp container happens to be listening on :4588.
+        const realFetch = globalThis.fetch
+        globalThis.fetch = (async () => {
+            throw Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:4588'), {code: 'ECONNREFUSED'})
+        }) as unknown as typeof globalThis.fetch
 
-        expect(res.status).toBe(200)
-        expect(body.cloud).toBe('gcp')
-        expect(body.adapterRegistered).toBe(false)
-        expect(body.runtime).toBe('unavailable')
-        expect(body.endpoint).toBe('http://localhost:4588')
+        try {
+            const res = await appWithRoutes().request('/api/clouds/gcp/status')
+            const body = await res.json()
+
+            expect(res.status).toBe(200)
+            expect(body.cloud).toBe('gcp')
+            expect(body.adapterRegistered).toBe(false)
+            expect(body.runtime).toBe('unavailable')
+            expect(body.endpoint).toBe('http://localhost:4588')
+        } finally {
+            globalThis.fetch = realFetch
+        }
     })
 
     test('lists storage objects through the cloud adapter', async () => {
@@ -281,7 +293,7 @@ describe('cloud schema routes', () => {
         const app = appWithRoutes([
             mockAdapter('aws', {
                 list: async () => {
-                    throw new Error('Cannot reach Floci-AZ at http://localhost:4577: connection refused')
+                    throw new RuntimeUnavailableError('Cannot reach Floci-AZ at http://localhost:4577: connection refused')
                 },
             }),
         ])
@@ -298,7 +310,7 @@ describe('cloud schema routes', () => {
         const app = appWithRoutes([
             mockAdapter('azure', {
                 create: async () => {
-                    throw new Error('Azure Blob request failed: HTTP 501')
+                    throw new NotImplementedByRuntimeError('Azure Blob request failed: HTTP 501')
                 },
             }),
         ])
@@ -312,4 +324,65 @@ describe('cloud schema routes', () => {
         expect(body.code).toBe('operation_not_implemented')
         expect(body.message).toBe('Operation is not implemented by the selected runtime')
     })
+
+    test('reports a missing adapter as unsupported rather than a runtime failure', async () => {
+        const res = await appWithRoutes([mockAdapter('aws')]).request('/api/clouds/azure/services/storage/resources')
+        const body = await res.json()
+
+        expect(res.status).toBe(501)
+        expect(body.code).toBe('operation_not_supported')
+        expect(body.detail).toContain('No adapter registered for azure/storage')
+    })
+
+    test('maps a validation error to 400 with the adapter message intact', async () => {
+        const app = appWithRoutes([
+            mockAdapter('aws', {
+                create: async () => {
+                    throw new ValidationError('bucketName is required')
+                },
+            }),
+        ])
+        const res = await app.request('/api/clouds/aws/services/storage/resources', {
+            method: 'POST',
+            body: JSON.stringify({}),
+        })
+        const body = await res.json()
+
+        expect(res.status).toBe(400)
+        expect(body.code).toBe('invalid_request')
+        expect(body.message).toBe('bucketName is required')
+    })
+
+    // Before typed errors these AWS SDK failures all collapsed into a blanket 502.
+    const sdkCases: Array<{name: string; status: number; code: string}> = [
+        {name: 'BucketAlreadyOwnedByYou', status: 409, code: 'resource_conflict'},
+        {name: 'AccessDenied', status: 403, code: 'access_denied'},
+        {name: 'ValidationException', status: 400, code: 'invalid_request'},
+        {name: 'ThrottlingException', status: 429, code: 'rate_limited'},
+        {name: 'NoSuchBucket', status: 404, code: 'resource_not_found'},
+    ]
+
+    for (const sdkCase of sdkCases) {
+        test(`maps the AWS SDK ${sdkCase.name} error to ${sdkCase.status}`, async () => {
+            const app = appWithRoutes([
+                mockAdapter('aws', {
+                    create: async () => {
+                        const err = new Error(`${sdkCase.name} raised by the runtime`)
+                        err.name = sdkCase.name
+                        Object.assign(err, {$metadata: {httpStatusCode: 500}, $fault: 'client'})
+                        throw err
+                    },
+                }),
+            ])
+            const res = await app.request('/api/clouds/aws/services/storage/resources', {
+                method: 'POST',
+                body: JSON.stringify({name: 'demo'}),
+            })
+            const body = await res.json()
+
+            expect(res.status).toBe(sdkCase.status)
+            expect(body.code).toBe(sdkCase.code)
+            expect(body.detail ?? body.message).toContain(sdkCase.name)
+        })
+    }
 })

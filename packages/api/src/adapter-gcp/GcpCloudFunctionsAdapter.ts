@@ -1,3 +1,4 @@
+import {ValidationError} from '../cloud-spi/errors'
 import {gcpServerlessSchema} from '../cloud-spi/serverlessSchema'
 import {gcpEndpoint, gcpLocation, gcpProject} from '../gcp'
 import type {
@@ -93,9 +94,9 @@ export class GcpCloudFunctionsAdapter implements CloudServiceAdapter {
         const entryPoint = stringValue(input.values.entryPoint)
         const code = stringValue(input.values.code)
 
-        if (!functionName) throw new Error('functionName is required')
-        if (!runtime) throw new Error('runtime is required')
-        if (!entryPoint) throw new Error('entryPoint is required')
+        if (!functionName) throw new ValidationError('functionName is required')
+        if (!runtime) throw new ValidationError('runtime is required')
+        if (!entryPoint) throw new ValidationError('entryPoint is required')
 
         const operation = await this.fetchJson<GcpOperation>(
             `${this.functionsPath()}?functionId=${encodeURIComponent(functionName)}`,

@@ -1,6 +1,8 @@
 import {Hono} from 'hono'
 import type {Context} from 'hono'
 import type {CloudProvider, CloudServiceType} from '../cloud-spi/types'
+import {toHttpError} from '../cloud-spi/errors'
+import {mapAwsSdkError} from '../adapter-aws/awsErrors'
 import {serviceForAccount} from '../cloudProxy'
 import {CloudProxyService} from '../service/CloudProxyService'
 
@@ -268,66 +270,8 @@ async function withRuntime(c: Context, handler: () => Promise<Response>): Promis
     try {
         return await handler()
     } catch (err) {
-        const error = normalizeRuntimeError(err)
-        return c.json(error.body, error.status)
-    }
-}
-
-function normalizeRuntimeError(err: unknown): {
-    status: 400 | 404 | 501 | 502 | 503
-    body: {error: string; code: string; message: string; detail?: string}
-} {
-    const message = err instanceof Error ? err.message : 'Runtime request failed'
-
-    if (message.includes('Cannot reach')) {
-        return errorResponse(503, 'runtime_unavailable', 'Runtime unavailable', message)
-    }
-
-    if (message.includes('Cosmos NoSQL request failed on all known routes')) {
-        return errorResponse(
-            502,
-            'cosmos_nosql_unavailable',
-            'Cosmos NoSQL endpoint is not available on the selected Floci-AZ runtime',
-            message,
-        )
-    }
-
-    if (message.includes('HTTP 501') || message.includes('NotImplemented')) {
-        return errorResponse(501, 'operation_not_implemented', 'Operation is not implemented by the selected runtime', message)
-    }
-
-    if (message.includes('not found') || message.includes('NotFound') || message.includes('NoSuchBucket') || message.includes('NoSuchKey')) {
-        return errorResponse(404, 'resource_not_found', 'Resource not found', message)
-    }
-
-    if (message.includes('is not supported') || message.includes('No adapter registered')) {
-        return errorResponse(501, 'operation_not_supported', 'Operation is not supported by this adapter', message)
-    }
-
-    if (message.includes('is required') || message.includes('Use a valid')) {
-        return errorResponse(400, 'invalid_request', message)
-    }
-
-    return errorResponse(502, 'runtime_error', 'Runtime request failed', message)
-}
-
-function errorResponse(
-    status: 400 | 404 | 501 | 502 | 503,
-    code: string,
-    message: string,
-    detail?: string,
-): {
-    status: 400 | 404 | 501 | 502 | 503
-    body: {error: string; code: string; message: string; detail?: string}
-} {
-    return {
-        status,
-        body: {
-            error: message,
-            code,
-            message,
-            ...(detail && detail !== message ? {detail} : {}),
-        },
+        const {status, body} = toHttpError(err, mapAwsSdkError)
+        return c.json(body, status)
     }
 }
 

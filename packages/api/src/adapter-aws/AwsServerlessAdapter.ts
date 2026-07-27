@@ -1,3 +1,4 @@
+import {ValidationError} from '../cloud-spi/errors'
 import {
   CreateFunctionCommand,
   DeleteFunctionCommand,
@@ -118,10 +119,10 @@ exports.handler = async (event) => {
 };
 `.trim();
 
-    if (!functionName) throw new Error("functionName is required");
-    if (!runtime) throw new Error("runtime is required");
-    if (!handler) throw new Error("handler is required");
-    if (!role) throw new Error("role is required");
+    if (!functionName) throw new ValidationError("functionName is required");
+    if (!runtime) throw new ValidationError("runtime is required");
+    if (!handler) throw new ValidationError("handler is required");
+    if (!role) throw new ValidationError("role is required");
 
     const res = await this.lambda.send(
       new CreateFunctionCommand({

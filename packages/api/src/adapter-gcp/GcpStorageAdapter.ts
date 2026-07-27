@@ -1,3 +1,4 @@
+import {ValidationError} from '../cloud-spi/errors'
 import {gcpStorageSchema} from '../cloud-spi/storageSchema'
 import {gcpEndpoint, gcpProject} from '../gcp'
 import type {
@@ -58,9 +59,9 @@ export class GcpStorageAdapter implements CloudServiceAdapter {
 
     async create(input: CreateResourceInput): Promise<CloudResource> {
         const bucketName = stringValue(input.values.bucketName)
-        if (!bucketName) throw new Error('bucketName is required')
+        if (!bucketName) throw new ValidationError('bucketName is required')
         if (!isValidBucketName(bucketName)) {
-            throw new Error('Use a valid GCS bucket name: 3-63 lowercase characters, numbers, dots, underscores, or hyphens.')
+            throw new ValidationError('Use a valid GCS bucket name: 3-63 lowercase characters, numbers, dots, underscores, or hyphens.')
         }
         const body = await this.fetchJson<GcpBucket>(`/storage/v1/b?project=${encodeURIComponent(this.project)}`, {
             method: 'POST',
