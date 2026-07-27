@@ -1,5 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
+# pnpm resolves platform-specific optional deps (e.g. Vite's rolldown native
+# binding) reliably; npm intermittently drops them (npm/cli#4828).
+RUN corepack enable && corepack prepare pnpm@9.2.0 --activate
 COPY package.json ./
-RUN npm install
-CMD ["npm", "run", "dev"]
+RUN pnpm install
+CMD ["pnpm", "run", "dev"]
