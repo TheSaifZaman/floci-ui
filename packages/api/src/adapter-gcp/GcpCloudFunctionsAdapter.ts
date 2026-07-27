@@ -173,6 +173,8 @@ function toResource(fn: GcpFunction): CloudResource {
             revision: serviceConfig.revision,
             allTrafficOnLatestRevision: serviceConfig.allTrafficOnLatestRevision,
             updateTime: fn.updateTime,
+            // Shared key so the serverless schema can surface one column for all clouds.
+            lastModified: fn.updateTime,
             labels: fn.labels,
         },
     }

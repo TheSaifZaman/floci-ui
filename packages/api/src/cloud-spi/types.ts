@@ -62,8 +62,22 @@ export interface FieldSchema {
     options?: Array<{label: string; value: string}>
 }
 
+/**
+ * Verbs a service can advertise. `ActionSchema` drives which controls the
+ * generic view renders; `ResourceActionName` additionally covers lifecycle verbs
+ * that a capability block can describe but that are not table-level controls.
+ */
 export type ActionSchema = 'list' | 'create' | 'delete' | 'inspect'
-export type ResourceActionName = 'list' | 'create' | 'delete' | 'inspect'
+export type ResourceActionName =
+    | 'list'
+    | 'create'
+    | 'delete'
+    | 'inspect'
+    | 'invoke'
+    | 'start'
+    | 'stop'
+    | 'reboot'
+    | 'updateTags'
 export type ObjectActionName = 'list' | 'upload' | 'download' | 'delete' | 'createFolder' | 'copy'
 export type CapabilityStatus = 'available' | 'blocked' | 'partial' | 'coming_soon'
 
@@ -76,9 +90,27 @@ export interface CapabilitySchema<TAction extends string> {
     runtimeRequired?: boolean
 }
 
+/**
+ * How a column is rendered. Everything past `label` is optional and every
+ * default reproduces the previous behaviour, so existing schemas are unaffected.
+ */
+export type ColumnFormat = 'text' | 'datetime' | 'relative' | 'bytes' | 'boolean' | 'badge' | 'code' | 'list'
+
 export interface TableColumnSchema {
+    /** Column identity and sort key. */
     name: string
     label: string
+    /**
+     * Dotted accessor into the resource, defaulting to `name`. Needed because
+     * most provider detail lives under `metadata`, which a top-level lookup
+     * cannot reach — those columns previously rendered blank for every row.
+     */
+    path?: string
+    format?: ColumnFormat
+    sortable?: boolean
+    copyable?: boolean
+    emptyText?: string
+    width?: string
 }
 
 export interface ServiceSchema {
@@ -197,6 +229,13 @@ export interface CloudServiceAdapter {
     getObject?(resourceId: string, key: string): Promise<StorageObjectDownload>
     deleteObject?(resourceId: string, key: string): Promise<void>
     invoke?(id: string, payload: string): Promise<ServerlessInvokeResult>
+    // Lifecycle verbs. Optional because most categories have no notion of them;
+    // an adapter that advertises one in `capabilities` must implement it, which
+    // cloudProxy.test.ts enforces.
+    start?(id: string): Promise<void>
+    stop?(id: string, force?: boolean): Promise<void>
+    reboot?(id: string): Promise<void>
+    updateTags?(id: string, tags: Record<string, string | null>): Promise<void>
     copyObject?(srcResourceId: string, srcKey: string, destKey: string, destResourceId?: string): Promise<void>
     listCosmosContainers?(databaseId: string): Promise<CosmosContainer[]>
     createCosmosContainer?(databaseId: string, input: CreateResourceInput): Promise<CosmosContainer>

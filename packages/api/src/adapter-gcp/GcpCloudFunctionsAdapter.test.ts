@@ -63,6 +63,8 @@ describe('GcpCloudFunctionsAdapter', () => {
                     revision: 'projects/floci-local/locations/us-central1/functions/hello/revisions/hello-00001',
                     allTrafficOnLatestRevision: true,
                     updateTime: '2026-06-22T05:29:13Z',
+                    // Shared key so one serverless column works across all clouds.
+                    lastModified: '2026-06-22T05:29:13Z',
                     labels: undefined,
                 },
             },
