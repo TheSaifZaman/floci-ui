@@ -34,13 +34,35 @@ export interface CloudServiceDescriptor {
     order: number
 }
 
+export type RuntimeReachability = 'reachable' | 'unavailable' | 'coming_soon'
+
 export interface CloudStatus {
     cloud: CloudProvider
     adapterRegistered: boolean
-    runtime: 'reachable' | 'unavailable' | 'coming_soon'
+    runtime: RuntimeReachability
     endpoint: string | null
     checkedAt: string
     error: string | null
+    /** Present only when the caller asks for per-service detail. */
+    services?: CloudServiceStatus[]
+}
+
+/**
+ * Health of one service rather than the whole cloud. Needed because a cloud can
+ * be up while an individual service is not — the Azure runtime serves blob
+ * storage but answers 501 for functions.
+ */
+export interface CloudServiceStatus {
+    cloud: CloudProvider
+    service: CloudServiceType
+    adapterRegistered: boolean
+    runtime: RuntimeReachability
+    endpoint: string | null
+    checkedAt: string
+    latencyMs: number | null
+    error: string | null
+    /** The mapped error code, so the UI can tell "not implemented" from "down". */
+    errorCode: string | null
 }
 
 export type FieldType = 'text' | 'select'
@@ -236,6 +258,11 @@ export interface CloudServiceAdapter {
     stop?(id: string, force?: boolean): Promise<void>
     reboot?(id: string): Promise<void>
     updateTags?(id: string, tags: Record<string, string | null>): Promise<void>
+    /**
+     * Cheap liveness check. Defaults to `list()`, which is a valid probe for
+     * every current adapter; override where listing is expensive.
+     */
+    health?(): Promise<void>
     copyObject?(srcResourceId: string, srcKey: string, destKey: string, destResourceId?: string): Promise<void>
     listCosmosContainers?(databaseId: string): Promise<CosmosContainer[]>
     createCosmosContainer?(databaseId: string, input: CreateResourceInput): Promise<CosmosContainer>

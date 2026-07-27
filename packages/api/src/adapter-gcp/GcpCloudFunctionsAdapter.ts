@@ -1,6 +1,6 @@
 import {ValidationError} from '../cloud-spi/errors'
 import {gcpServerlessSchema} from '../cloud-spi/serverlessSchema'
-import {gcpEndpoint, gcpLocation, gcpProject} from '../gcp'
+import {gcp, type GcpRuntimeClient} from '../gcp'
 import type {
     CloudResource,
     CloudServiceAdapter,
@@ -67,25 +67,24 @@ export class GcpCloudFunctionsAdapter implements CloudServiceAdapter {
     readonly cloud = 'gcp' as const
     readonly service = 'serverless' as const
 
-    constructor(
-        private readonly endpoint: string = gcpEndpoint(),
-        private readonly project: string = gcpProject(),
-        private readonly location: string = gcpLocation(),
-    ) {}
+    constructor(private readonly client: GcpRuntimeClient = gcp) {}
 
     schema(): ServiceSchema {
         return gcpServerlessSchema()
     }
 
     async list(query: ResourceQuery = {}): Promise<CloudResource[]> {
-        const body = await this.fetchJson<GcpFunctionList>(this.functionsPath())
-        return filterBySearch((body.functions ?? []).map(toResource), query.search)
+        const body = await this.client.json<GcpFunctionList>(this.functionsPath())
+        return filterBySearch((body?.functions ?? []).map(toResource), query.search)
     }
 
     async get(id: string): Promise<CloudResource | null> {
-        const res = await this.fetch(`${this.functionsPath()}/${encodeURIComponent(id)}`, {method: 'GET'}, true)
-        if (res.status === 404) return null
-        return toResource(await res.json() as GcpFunction)
+        const fn = await this.client.json<GcpFunction>(
+            `${this.functionsPath()}/${encodeURIComponent(id)}`,
+            {method: 'GET'},
+            {emptyOnNotFound: true},
+        )
+        return fn ? toResource(fn) : null
     }
 
     async create(input: CreateResourceInput): Promise<CloudResource> {
@@ -98,7 +97,7 @@ export class GcpCloudFunctionsAdapter implements CloudServiceAdapter {
         if (!runtime) throw new ValidationError('runtime is required')
         if (!entryPoint) throw new ValidationError('entryPoint is required')
 
-        const operation = await this.fetchJson<GcpOperation>(
+        const operation = await this.client.json<GcpOperation>(
             `${this.functionsPath()}?functionId=${encodeURIComponent(functionName)}`,
             {
                 method: 'POST',
@@ -114,36 +113,18 @@ export class GcpCloudFunctionsAdapter implements CloudServiceAdapter {
         )
 
         // create returns an Operation envelope; the function is under `response`.
-        const fn = operation.response ?? (operation as unknown as GcpFunction)
-        return toResource(fn)
+        const fn = operation?.response ?? (operation as unknown as GcpFunction | null)
+        return toResource(fn ?? {name: functionName})
     }
 
     async delete(id: string): Promise<void> {
-        await this.fetch(`${this.functionsPath()}/${encodeURIComponent(id)}`, {method: 'DELETE'}, true)
+        await this.client.fetch(`${this.functionsPath()}/${encodeURIComponent(id)}`, {method: 'DELETE'}, {emptyOnNotFound: true})
     }
 
     private functionsPath(): string {
-        return `/v2/projects/${encodeURIComponent(this.project)}/locations/${encodeURIComponent(this.location)}/functions`
+        return `/v2/projects/${encodeURIComponent(this.client.project)}/locations/${encodeURIComponent(this.client.location)}/functions`
     }
 
-    private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-        const res = await this.fetch(path, init)
-        return res.json() as Promise<T>
-    }
-
-    private async fetch(path: string, init: RequestInit, emptyOnNotFound = false): Promise<Response> {
-        let res: Response
-        try {
-            res = await globalThis.fetch(`${this.endpoint}${path}`, init)
-        } catch (error) {
-            throw new Error(`Cannot reach Floci-GCP at ${this.endpoint}: ${errorMessage(error)}`)
-        }
-        if (emptyOnNotFound && res.status === 404) return res
-        if (!res.ok) {
-            throw new Error(`GCP Cloud Functions request failed: HTTP ${res.status}`)
-        }
-        return res
-    }
 }
 
 function toResource(fn: GcpFunction): CloudResource {
@@ -198,8 +179,4 @@ function filterBySearch(resources: CloudResource[], search?: string): CloudResou
     const normalized = search?.trim().toLowerCase()
     if (!normalized) return resources
     return resources.filter((resource) => resource.name.toLowerCase().includes(normalized))
-}
-
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
 }

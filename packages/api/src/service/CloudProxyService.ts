@@ -5,6 +5,7 @@ import type {
     CloudResource,
     CloudServiceDescriptor,
     CloudServiceType,
+    CloudServiceStatus,
     CloudStatus,
     CosmosContainer,
     CosmosItem,
@@ -12,6 +13,7 @@ import type {
     CreateResourceInput,
     ResourceQuery,
     ServerlessInvokeResult,
+    RuntimeReachability,
     ServiceSchema,
     StorageObjectDownload,
     StorageObjectList,
@@ -19,10 +21,21 @@ import type {
 import {NotSupportedError} from '../cloud-spi/errors'
 import {CloudAdapterRegistry} from '../registry/CloudAdapterRegistry'
 import {SERVICE_CATALOG_ENTRIES, displayNameFor, routeFor} from '../cloud-spi/serviceCatalog'
-import {azureEndpoint} from '../azure'
-import {checkGcpRuntime, gcpEndpoint} from '../gcp'
+import {toHttpError} from '../cloud-spi/errors'
+import {mapAwsSdkError} from '../adapter-aws/awsErrors'
+import {endpointFor, runtimeProbes} from './runtimeProbe'
+
+/**
+ * Status probes are real network calls and the console polls them on a short
+ * interval, so results are memoized briefly. Without this, asking for
+ * per-service detail turns one page load into a probe per registered service.
+ */
+const STATUS_TTL_MS = 5_000
 
 export class CloudProxyService {
+    private readonly runtimeCache = new Map<CloudProvider, {at: number; value: {runtime: RuntimeReachability; checkedAt: string; error: string | null}}>()
+    private readonly serviceStatusCache = new Map<string, {at: number; value: CloudServiceStatus}>()
+
     constructor(private readonly registry: CloudAdapterRegistry) {}
 
     clouds(): CloudDescriptor[] {
@@ -70,62 +83,98 @@ export class CloudProxyService {
         return this.registry.get(cloud, service)?.schema() ?? null
     }
 
-    async status(cloud: CloudProvider): Promise<CloudStatus> {
-        const adapter = this.registry.get(cloud, 'storage')
-        if (cloud === 'gcp') {
-            try {
-                await checkGcpRuntime()
-                return {
-                    cloud,
-                    adapterRegistered: Boolean(adapter),
-                    runtime: 'reachable',
-                    endpoint: endpointFor(cloud),
-                    checkedAt: new Date().toISOString(),
-                    error: null,
-                }
-            } catch (error) {
-                return {
-                    cloud,
-                    adapterRegistered: Boolean(adapter),
-                    runtime: 'unavailable',
-                    endpoint: endpointFor(cloud),
-                    checkedAt: new Date().toISOString(),
-                    error: error instanceof Error ? error.message : 'Runtime check failed',
-                }
-            }
+    /**
+     * Cloud-level reachability, probed against the runtime itself rather than
+     * inferred from one adapter's list call.
+     *
+     * Per-service detail is opt-in: the sidebar polls this every few seconds, so
+     * fanning out across every service by default would hammer the runtime.
+     */
+    async status(cloud: CloudProvider, options: {includeServices?: boolean} = {}): Promise<CloudStatus> {
+        const services = this.registry.servicesFor(cloud)
+        const cached = await this.probeRuntime(cloud)
+
+        const base: CloudStatus = {
+            cloud,
+            adapterRegistered: services.length > 0,
+            runtime: cached.runtime,
+            endpoint: endpointFor(cloud),
+            checkedAt: cached.checkedAt,
+            error: cached.error,
         }
+
+        if (!options.includeServices) return base
+
+        return {
+            ...base,
+            services: await Promise.all(services.map((service) => this.serviceStatus(cloud, service))),
+        }
+    }
+
+    /** Health of a single service, so the UI can gate on the service it is showing. */
+    async serviceStatus(cloud: CloudProvider, service: CloudServiceType): Promise<CloudServiceStatus> {
+        const cacheKey = `${cloud}:${service}`
+        const cached = this.serviceStatusCache.get(cacheKey)
+        if (cached && Date.now() - cached.at < STATUS_TTL_MS) return cached.value
+
+        const value = await this.measureServiceStatus(cloud, service)
+        this.serviceStatusCache.set(cacheKey, {at: Date.now(), value})
+        return value
+    }
+
+    private async measureServiceStatus(cloud: CloudProvider, service: CloudServiceType): Promise<CloudServiceStatus> {
+        const endpoint = endpointFor(cloud)
+        const adapter = this.registry.get(cloud, service)
+        const checkedAt = new Date().toISOString()
 
         if (!adapter) {
             return {
-                cloud,
-                adapterRegistered: false,
-                runtime: 'coming_soon',
-                endpoint: endpointFor(cloud),
-                checkedAt: new Date().toISOString(),
-                error: null,
+                cloud, service, adapterRegistered: false, runtime: 'coming_soon',
+                endpoint, checkedAt, latencyMs: null, error: null, errorCode: null,
             }
         }
 
+        const startedAt = performance.now()
         try {
-            await adapter.list()
+            // list() is a valid probe for every current adapter; health() overrides it.
+            if (adapter.health) await adapter.health()
+            else await adapter.list()
             return {
-                cloud,
-                adapterRegistered: true,
-                runtime: 'reachable',
-                endpoint: endpointFor(cloud),
-                checkedAt: new Date().toISOString(),
-                error: null,
+                cloud, service, adapterRegistered: true, runtime: 'reachable',
+                endpoint, checkedAt, latencyMs: Math.round(performance.now() - startedAt),
+                error: null, errorCode: null,
             }
         } catch (error) {
+            // The mapped code is what lets the UI distinguish "the runtime does not
+            // implement this" from "the runtime is down".
+            const {body} = toHttpError(error, mapAwsSdkError)
             return {
-                cloud,
-                adapterRegistered: true,
+                cloud, service, adapterRegistered: true, runtime: 'unavailable',
+                endpoint, checkedAt, latencyMs: Math.round(performance.now() - startedAt),
+                error: body.detail ?? body.message, errorCode: body.code,
+            }
+        }
+    }
+
+    private async probeRuntime(cloud: CloudProvider): Promise<{runtime: RuntimeReachability; checkedAt: string; error: string | null}> {
+        const cached = this.runtimeCache.get(cloud)
+        if (cached && Date.now() - cached.at < STATUS_TTL_MS) return cached.value
+
+        const checkedAt = new Date().toISOString()
+        let value: {runtime: RuntimeReachability; checkedAt: string; error: string | null}
+        try {
+            await runtimeProbes[cloud]()
+            value = {runtime: 'reachable', checkedAt, error: null}
+        } catch (error) {
+            value = {
                 runtime: 'unavailable',
-                endpoint: endpointFor(cloud),
-                checkedAt: new Date().toISOString(),
+                checkedAt,
                 error: error instanceof Error ? error.message : 'Runtime check failed',
             }
         }
+
+        this.runtimeCache.set(cloud, {at: Date.now(), value})
+        return value
     }
 
     async listResources(cloud: CloudProvider, service: CloudServiceType, query: ResourceQuery): Promise<CloudResource[]> {
@@ -242,9 +291,3 @@ function unavailableReason(
     return `No ${cloud.toUpperCase()} adapter is registered for ${displayName} yet.`
 }
 
-function endpointFor(cloud: CloudProvider): string | null {
-    if (cloud === 'aws') return process.env.FLOCI_ENDPOINT ?? 'http://localhost:4566'
-    if (cloud === 'azure') return azureEndpoint()
-    if (cloud === 'gcp') return gcpEndpoint()
-    return null
-}

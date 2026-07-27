@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, test} from 'bun:test'
 import {GcpCloudFunctionsAdapter} from './GcpCloudFunctionsAdapter'
+import {GcpRestRuntimeClient} from '../gcp'
 
 const originalFetch = globalThis.fetch
 const ENDPOINT = 'http://localhost:4588'
@@ -10,7 +11,7 @@ afterEach(() => {
 })
 
 function adapter(): GcpCloudFunctionsAdapter {
-    return new GcpCloudFunctionsAdapter(ENDPOINT, 'floci-local', 'us-central1')
+    return new GcpCloudFunctionsAdapter(new GcpRestRuntimeClient(ENDPOINT, 'floci-local', 'us-central1'))
 }
 
 function gen2Function(name: string) {

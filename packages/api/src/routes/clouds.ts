@@ -30,7 +30,16 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
     app.get('/:cloud/status', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
-        return c.json(await svc(c).status(cloud))
+        // Per-service detail is opt-in; the connection indicator polls this often.
+        const includeServices = c.req.query('services') === 'all'
+        return c.json(await svc(c).status(cloud, {includeServices}))
+    })
+
+    app.get('/:cloud/services/:service/status', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        const serviceType = c.req.param('service') as CloudServiceType
+        if (!isCloudProvider(cloud) || !isServiceType(serviceType)) return c.json({error: 'Unknown cloud or service'}, 404)
+        return c.json(await svc(c).serviceStatus(cloud, serviceType))
     })
 
     app.get('/:cloud/services/:service/schema', (c) => {
