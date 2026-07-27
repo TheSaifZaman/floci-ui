@@ -1,4 +1,5 @@
 import type {
+    CloudAvailability,
     CloudDescriptor,
     CloudProvider,
     CloudResource,
@@ -15,12 +16,9 @@ import type {
     StorageObjectDownload,
     StorageObjectList,
 } from '../cloud-spi/types'
-import {storageSchemaFor} from '../cloud-spi/storageSchema'
 import {NotSupportedError} from '../cloud-spi/errors'
 import {CloudAdapterRegistry} from '../registry/CloudAdapterRegistry'
-import {serverlessSchemaFor} from '../cloud-spi/serverlessSchema'
-import {k8sSchemaFor} from '../cloud-spi/eksSchema'
-import {databaseSchemaFor} from '../cloud-spi/databaseSchema'
+import {SERVICE_CATALOG_ENTRIES, displayNameFor, routeFor} from '../cloud-spi/serviceCatalog'
 import {azureEndpoint} from '../azure'
 import {checkGcpRuntime, gcpEndpoint} from '../gcp'
 
@@ -35,56 +33,41 @@ export class CloudProxyService {
         ]
     }
 
+    /**
+     * Derived from the service catalog and the adapter registry — never from a
+     * hardcoded per-cloud list. Registering an adapter is therefore the only
+     * thing needed to make a service appear as available in the UI.
+     */
     services(cloud: CloudProvider): CloudServiceDescriptor[] {
+        return SERVICE_CATALOG_ENTRIES.map((entry) => {
+            const adapter = this.registry.get(cloud, entry.service)
+            const override = adapter?.descriptorOverride?.() ?? {}
+            const derived: CloudAvailability = entry.legacyAvailability?.[cloud]
+                ?? (adapter ? 'available' : 'coming_soon')
+            const availability = override.availability ?? derived
+            const displayName = override.displayName ?? displayNameFor(entry, cloud)
 
-        const services: CloudServiceDescriptor[] = [{
-            cloud,
-            service: 'storage',
-            displayName: 'Storage',
-            availability: this.registry.get(cloud, 'storage') ? 'available' : 'coming_soon',
-        }]
-
-        services.push({
-            cloud,
-            service: 'k8s',
-            displayName: 'k8s Engine',
-            availability: this.registry.get(cloud, 'k8s') ? 'available' : 'coming_soon',
+            return {
+                cloud,
+                service: entry.service,
+                displayName,
+                availability,
+                reason: override.reason ?? unavailableReason(availability, cloud, displayName),
+                route: routeFor(entry),
+                iconKey: entry.iconKey,
+                group: entry.group,
+                order: entry.order,
+            }
         })
-        services.push({
-            cloud,
-            service: 'database',
-            displayName: 'Database',
-            availability: this.registry.get(cloud, 'database') ? 'available' : 'coming_soon',
-        })
-        services.push({
-            cloud,
-            service: 'serverless',
-            displayName: 'Serverless',
-            availability: this.registry.get(cloud, 'serverless') ? 'available' : 'coming_soon',
-        })
-        services.push({
-            cloud,
-            service: 'compute',
-            displayName: 'Compute',
-            availability: this.registry.get(cloud, 'compute') ? 'available' : 'coming_soon',
-        })
-        services.push({
-            cloud,
-            service: 'networking',
-            displayName: 'Networking',
-            availability: this.registry.get(cloud, 'networking') ? 'available' : 'coming_soon',
-        })
-        return services
     }
 
+    /**
+     * Only a registered adapter can describe a service. Returning a static
+     * schema for an unregistered pair used to make the UI render a table that
+     * then failed on every request.
+     */
     schema(cloud: CloudProvider, service: CloudServiceType): ServiceSchema | null {
-        const adapter = this.registry.get(cloud, service)
-        if (adapter) return adapter.schema()
-        if (service === 'storage') return storageSchemaFor(cloud)
-        if (service === 'k8s') return k8sSchemaFor(cloud)
-        if (service === 'database') return databaseSchemaFor(cloud)
-        if (service === 'serverless') return serverlessSchemaFor(cloud)
-        return null
+        return this.registry.get(cloud, service)?.schema() ?? null
     }
 
     async status(cloud: CloudProvider): Promise<CloudStatus> {
@@ -247,6 +230,16 @@ async invokeResource(
         if (!adapter) throw new NotSupportedError(`No adapter registered for ${cloud}/${service}`)
         return adapter
     }
+}
+
+/** Keeps the promise that every coming_soon descriptor explains itself. */
+function unavailableReason(
+    availability: CloudAvailability,
+    cloud: CloudProvider,
+    displayName: string,
+): string | undefined {
+    if (availability === 'available') return undefined
+    return `No ${cloud.toUpperCase()} adapter is registered for ${displayName} yet.`
 }
 
 function endpointFor(cloud: CloudProvider): string | null {

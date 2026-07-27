@@ -1,6 +1,10 @@
-export type CloudProvider = 'aws' | 'azure' | 'gcp'
+// Derived from SERVICE_CATALOG so a new catalog row is a new service type.
+// This type-only cycle with serviceCatalog.ts is erased at compile time.
+import type {CloudServiceType, ServiceGroup} from './serviceCatalog'
 
-export type CloudServiceType = 'storage' | 'k8s' | 'database' | 'serverless' | 'compute' | 'networking'
+export type {CloudServiceType, ServiceGroup}
+
+export type CloudProvider = 'aws' | 'azure' | 'gcp'
 
 export type CloudAvailability = 'available' | 'coming_soon'
 
@@ -10,11 +14,24 @@ export interface CloudDescriptor {
     availability: CloudAvailability
 }
 
+/**
+ * What the frontend needs to render a nav entry. Everything except
+ * `availability` and `reason` comes from the service catalog; those two are
+ * resolved per cloud at request time.
+ */
 export interface CloudServiceDescriptor {
     cloud: CloudProvider
     service: CloudServiceType
     displayName: string
     availability: CloudAvailability
+    /** Why the service is unavailable. Always set when availability is coming_soon. */
+    reason?: string
+    /** Route slug, or an absolute path for a page outside Cloud Explorer. */
+    route: string
+    /** Icon hint; the frontend maps it to a component and falls back if unknown. */
+    iconKey: string
+    group: ServiceGroup
+    order: number
 }
 
 export interface CloudStatus {
@@ -151,10 +168,26 @@ export interface ServerlessInvokeResult {
     logResult?: string
     executionDuration?: number
 }
+/**
+ * Lets a registered adapter correct its own advertised availability.
+ *
+ * Needed because "an adapter exists" and "the local runtime implements it" are
+ * different facts: floci-az ships no /functions endpoint, so the Azure
+ * serverless adapter is registered but cannot serve a request. Declaring that
+ * here keeps the sidebar, the console card and the explorer surface consistent
+ * from one string.
+ */
+export interface CloudServiceDescriptorOverride {
+    availability?: CloudAvailability
+    reason?: string
+    displayName?: string
+}
+
 export interface CloudServiceAdapter {
     readonly cloud: CloudProvider
     readonly service: CloudServiceType
     schema(): ServiceSchema
+    descriptorOverride?(): CloudServiceDescriptorOverride
     list(query?: ResourceQuery): Promise<CloudResource[]>
     get(id: string): Promise<CloudResource | null>
     create(input: CreateResourceInput): Promise<CloudResource>

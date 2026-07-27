@@ -2,6 +2,7 @@ import {Hono} from 'hono'
 import type {Context} from 'hono'
 import type {CloudProvider, CloudServiceType} from '../cloud-spi/types'
 import {toHttpError} from '../cloud-spi/errors'
+import {isServiceType} from '../cloud-spi/serviceCatalog'
 import {mapAwsSdkError} from '../adapter-aws/awsErrors'
 import {serviceForAccount} from '../cloudProxy'
 import {CloudProxyService} from '../service/CloudProxyService'
@@ -260,10 +261,6 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
 
 function isCloudProvider(value: string): value is CloudProvider {
     return value === 'aws' || value === 'azure' || value === 'gcp'
-}
-
-function isServiceType(value: string): value is CloudServiceType {
-    return value === 'storage' || value === 'k8s' || value === 'database' || value === 'serverless' || value === 'compute' || value === 'networking'
 }
 
 async function withRuntime(c: Context, handler: () => Promise<Response>): Promise<Response> {

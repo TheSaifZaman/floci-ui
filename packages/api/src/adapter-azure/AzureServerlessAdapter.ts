@@ -4,6 +4,7 @@ import { azureServerlessSchema } from '../cloud-spi/serverlessSchema'
 import type {
     CloudResource,
     CloudServiceAdapter,
+    CloudServiceDescriptorOverride,
     CreateResourceInput,
     ResourceQuery,
     ServerlessInvokeResult,
@@ -38,6 +39,19 @@ export class AzureServerlessAdapter implements CloudServiceAdapter {
     readonly service = 'serverless' as const
 
     constructor(private readonly client: AzureRuntimeClient = azure) { }
+
+    /**
+     * floci-az answers 501 NotImplemented on /functions, so this adapter cannot
+     * currently serve a request even though it is registered. Reporting
+     * coming_soon keeps the nav honest; remove this once the runtime ships the
+     * endpoint and the adapter's own tests exercise it against a real response.
+     */
+    descriptorOverride(): CloudServiceDescriptorOverride {
+        return {
+            availability: 'coming_soon',
+            reason: 'The Floci-AZ runtime returns 501 NotImplemented for the Azure Functions endpoint.',
+        }
+    }
 
     schema(): ServiceSchema {
         return azureServerlessSchema()
