@@ -46,6 +46,8 @@ describe('mapAwsSdkError', () => {
         ['ValidationException', 400, 'invalid_request'],
         ['InvalidParameterValue', 400, 'invalid_request'],
         ['MalformedPolicyDocument', 400, 'invalid_request'],
+        // A bad parameter set, not an existing-resource clash.
+        ['InvalidParameterCombination', 400, 'invalid_request'],
         // not found
         ['NoSuchBucket', 404, 'resource_not_found'],
         ['NoSuchKey', 404, 'resource_not_found'],

@@ -23,7 +23,7 @@ import {CloudAdapterRegistry} from '../registry/CloudAdapterRegistry'
 import {SERVICE_CATALOG_ENTRIES, displayNameFor, routeFor} from '../cloud-spi/serviceCatalog'
 import {toHttpError} from '../cloud-spi/errors'
 import {mapAwsSdkError} from '../adapter-aws/awsErrors'
-import {endpointFor, runtimeProbes} from './runtimeProbe'
+import {endpointFor, runtimeProbes, type RuntimeProbe} from './runtimeProbe'
 
 /**
  * Status probes are real network calls and the console polls them on a short
@@ -35,8 +35,19 @@ const STATUS_TTL_MS = 5_000
 export class CloudProxyService {
     private readonly runtimeCache = new Map<CloudProvider, {at: number; value: {runtime: RuntimeReachability; checkedAt: string; error: string | null}}>()
     private readonly serviceStatusCache = new Map<string, {at: number; value: CloudServiceStatus}>()
+    private readonly probes: Record<CloudProvider, RuntimeProbe>
 
-    constructor(private readonly registry: CloudAdapterRegistry) {}
+    /**
+     * `probes` is injectable so tests can exercise status without reaching the
+     * network — the probes hit real runtime endpoints, which are present on a
+     * developer machine and absent in CI.
+     */
+    constructor(
+        private readonly registry: CloudAdapterRegistry,
+        probes: Record<CloudProvider, RuntimeProbe> = runtimeProbes,
+    ) {
+        this.probes = probes
+    }
 
     clouds(): CloudDescriptor[] {
         return [
@@ -163,7 +174,7 @@ export class CloudProxyService {
         const checkedAt = new Date().toISOString()
         let value: {runtime: RuntimeReachability; checkedAt: string; error: string | null}
         try {
-            await runtimeProbes[cloud]()
+            await this.probes[cloud]()
             value = {runtime: 'reachable', checkedAt, error: null}
         } catch (error) {
             value = {

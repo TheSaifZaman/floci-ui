@@ -54,7 +54,6 @@ const CONFLICT_NAMES = new Set([
     'InvalidChangeBatch',
     'DBInstanceAlreadyExists',
     'DBInstanceAlreadyExistsFault',
-    'InvalidParameterCombination',
     'ConcurrentModificationException',
     'IncorrectState',
 ])
@@ -76,6 +75,7 @@ const VALIDATION_NAMES = new Set([
     'ValidationError',
     'InvalidParameterValue',
     'InvalidParameterValueException',
+    'InvalidParameterCombination',
     'InvalidRequestException',
     'InvalidInput',
     'InvalidInputException',

@@ -6,6 +6,7 @@ import {awsStorageSchema, azureStorageSchema, gcpStorageSchema} from '../cloud-s
 import type {CloudProvider, CloudResource, CloudServiceAdapter, CosmosContainer, CosmosItem, CosmosQueryResult, CreateResourceInput} from '../cloud-spi/types'
 import {CloudAdapterRegistry} from '../registry/CloudAdapterRegistry'
 import {CloudProxyService} from '../service/CloudProxyService'
+import type {RuntimeProbe} from '../service/runtimeProbe'
 import {createCloudRoutes} from './clouds'
 
 function mockAdapter(cloud: CloudProvider, overrides: Partial<CloudServiceAdapter> = {}): CloudServiceAdapter {
@@ -41,10 +42,29 @@ function mockAdapter(cloud: CloudProvider, overrides: Partial<CloudServiceAdapte
     }
 }
 
-function appWithRoutes(adapters: CloudServiceAdapter[] = [mockAdapter('aws'), mockAdapter('azure')]) {
+/**
+ * Runtime probes make real HTTP calls to the emulator endpoints, so tests inject
+ * stubs — otherwise status assertions depend on whether a container happens to
+ * be listening, which passes locally and fails in CI.
+ */
+function stubProbes(overrides: Partial<Record<CloudProvider, RuntimeProbe>> = {}): Record<CloudProvider, RuntimeProbe> {
+    const reachable: RuntimeProbe = async () => {}
+    return {aws: reachable, azure: reachable, gcp: reachable, ...overrides}
+}
+
+function unreachable(message: string): RuntimeProbe {
+    return async () => {
+        throw new RuntimeUnavailableError(message)
+    }
+}
+
+function appWithRoutes(
+    adapters: CloudServiceAdapter[] = [mockAdapter('aws'), mockAdapter('azure')],
+    probes: Record<CloudProvider, RuntimeProbe> = stubProbes(),
+) {
     const app = new Hono()
     const registry = new CloudAdapterRegistry(adapters)
-    app.route('/api/clouds', createCloudRoutes(new CloudProxyService(registry)))
+    app.route('/api/clouds', createCloudRoutes(new CloudProxyService(registry, probes)))
     return app
 }
 
@@ -129,25 +149,32 @@ describe('cloud schema routes', () => {
     })
 
     test('returns GCP runtime status without a registered adapter', async () => {
-        // The GCP probe is a real HTTP call, so stub fetch rather than depending on
-        // whether a floci-gcp container happens to be listening on :4588.
-        const realFetch = globalThis.fetch
-        globalThis.fetch = (async () => {
-            throw Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:4588'), {code: 'ECONNREFUSED'})
-        }) as unknown as typeof globalThis.fetch
+        const app = appWithRoutes(
+            [mockAdapter('aws'), mockAdapter('azure')],
+            stubProbes({gcp: unreachable('Cannot reach Floci-GCP at http://localhost:4588')}),
+        )
+        const res = await app.request('/api/clouds/gcp/status')
+        const body = await res.json()
 
-        try {
-            const res = await appWithRoutes().request('/api/clouds/gcp/status')
-            const body = await res.json()
+        expect(res.status).toBe(200)
+        expect(body.cloud).toBe('gcp')
+        expect(body.adapterRegistered).toBe(false)
+        expect(body.runtime).toBe('unavailable')
+        expect(body.endpoint).toBe('http://localhost:4588')
+        expect(body.error).toContain('Cannot reach Floci-GCP')
+    })
 
-            expect(res.status).toBe(200)
-            expect(body.cloud).toBe('gcp')
-            expect(body.adapterRegistered).toBe(false)
-            expect(body.runtime).toBe('unavailable')
-            expect(body.endpoint).toBe('http://localhost:4588')
-        } finally {
-            globalThis.fetch = realFetch
-        }
+    test('cloud status reflects the runtime probe, not one adapter listing', async () => {
+        // Previously a cloud whose storage adapter could list reported "reachable"
+        // no matter what state the runtime was actually in.
+        const app = appWithRoutes(
+            [mockAdapter('aws')],
+            stubProbes({aws: unreachable('Cannot reach Floci core at http://localhost:4566')}),
+        )
+        const body = await (await app.request('/api/clouds/aws/status')).json()
+
+        expect(body.runtime).toBe('unavailable')
+        expect(body.adapterRegistered).toBe(true)
     })
 
     test('lists storage objects through the cloud adapter', async () => {
@@ -462,15 +489,6 @@ describe('service descriptors', () => {
 })
 
 describe('per-service status', () => {
-    /** Cloud-level probes are real HTTP calls; keep them out of these assertions. */
-    function withStubbedRuntime<T>(run: () => Promise<T>): Promise<T> {
-        const realFetch = globalThis.fetch
-        globalThis.fetch = (async () => new Response('', {status: 200})) as unknown as typeof globalThis.fetch
-        return run().finally(() => {
-            globalThis.fetch = realFetch
-        })
-    }
-
     test('reports a reachable service with a latency measurement', async () => {
         const res = await appWithRoutes().request('/api/clouds/aws/services/storage/status')
         const body = await res.json()
@@ -540,19 +558,15 @@ describe('per-service status', () => {
     })
 
     test('omits per-service detail from the cloud status by default', async () => {
-        await withStubbedRuntime(async () => {
-            const body = await (await appWithRoutes().request('/api/clouds/aws/status')).json()
-            expect(body.services).toBeUndefined()
-        })
+        const body = await (await appWithRoutes().request('/api/clouds/aws/status')).json()
+        expect(body.services).toBeUndefined()
     })
 
     test('includes per-service detail only when asked', async () => {
-        await withStubbedRuntime(async () => {
-            const body = await (await appWithRoutes().request('/api/clouds/aws/status?services=all')).json()
+        const body = await (await appWithRoutes().request('/api/clouds/aws/status?services=all')).json()
 
-            expect(Array.isArray(body.services)).toBe(true)
-            expect(body.services[0]).toMatchObject({cloud: 'aws', service: 'storage'})
-        })
+        expect(Array.isArray(body.services)).toBe(true)
+        expect(body.services[0]).toMatchObject({cloud: 'aws', service: 'storage'})
     })
 
     test('caches probes so a polling sidebar does not fan out per request', async () => {
