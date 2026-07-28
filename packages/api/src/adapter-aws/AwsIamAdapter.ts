@@ -6,6 +6,7 @@ import {
     DeleteRoleCommand,
     DeleteUserCommand,
     GetPolicyCommand,
+    GetPolicyVersionCommand,
     GetRoleCommand,
     GetUserCommand,
     type IAMClient,
@@ -48,6 +49,9 @@ type Identity =
 
 const SINGULAR_TO_KIND: Record<string, IamKind> = {user: 'users', role: 'roles', policy: 'policies'}
 
+/** A policy's document, or the fact that it could not be read. */
+type DocumentLookup = {document?: string; unavailable?: true}
+
 export class AwsIamAdapter implements CloudServiceAdapter {
     readonly cloud = 'aws' as const
     readonly service = 'iam' as const
@@ -63,7 +67,11 @@ export class AwsIamAdapter implements CloudServiceAdapter {
         const kinds = kind ? [kind] : [...IAM_KINDS]
 
         const groups = await Promise.all(kinds.map((each) => this.listKind(each)))
-        return filterBySearch(groups.flat().map(toResource), query.search)
+        // Not `.map(toResource)`: map would pass the index as the document argument.
+        return filterBySearch(
+            groups.flat().map((identity) => toResource(identity)),
+            query.search,
+        )
     }
 
     async get(id: string): Promise<CloudResource | null> {
@@ -79,7 +87,9 @@ export class AwsIamAdapter implements CloudServiceAdapter {
                 return res.Role ? toResource({kind, value: res.Role}) : null
             }
             const res = await this.iam.send(new GetPolicyCommand({PolicyArn: identifier}))
-            return res.Policy ? toResource({kind, value: res.Policy}) : null
+            if (!res.Policy) return null
+            // Only on inspect: one GetPolicyVersion per row would make list an N+1.
+            return toResource({kind, value: res.Policy}, await this.policyDocument(res.Policy))
         } catch (error) {
             if (isNoSuchEntity(error)) return null
             throw error
@@ -133,6 +143,24 @@ export class AwsIamAdapter implements CloudServiceAdapter {
         await this.iam.send(new DeletePolicyCommand({PolicyArn: identifier}))
     }
 
+    /**
+     * Load the policy's default version so inspect can show the document, the way
+     * a role shows its trust policy. Failure degrades the row rather than the
+     * request — the policy metadata is worth showing without the body.
+     */
+    private async policyDocument(policy: Policy): Promise<DocumentLookup> {
+        const arn = policy.Arn
+        const versionId = policy.DefaultVersionId
+        if (!arn || !versionId) return {}
+
+        try {
+            const res = await this.iam.send(new GetPolicyVersionCommand({PolicyArn: arn, VersionId: versionId}))
+            return {document: decodePolicyDocument(res.PolicyVersion?.Document)}
+        } catch {
+            return {unavailable: true}
+        }
+    }
+
     private created(identity: Identity | null, name: string): CloudResource {
         if (!identity) throw new RuntimeError(`IAM did not return the created resource for ${name}`)
         return toResource(identity)
@@ -180,7 +208,7 @@ export class AwsIamAdapter implements CloudServiceAdapter {
     }
 }
 
-function toResource(identity: Identity): CloudResource {
+function toResource(identity: Identity, policyDoc: DocumentLookup = {}): CloudResource {
     const singular = IAM_KIND_SINGULAR[identity.kind]
     const common = {
         cloud: 'aws' as const,
@@ -250,6 +278,9 @@ function toResource(identity: Identity): CloudResource {
             description: policy.Description,
             attachmentCount: policy.AttachmentCount,
             defaultVersionId: policy.DefaultVersionId,
+            /** Only populated by inspect; list would be an N+1. */
+            ...(policyDoc.document ? {policyDocument: policyDoc.document} : {}),
+            ...(policyDoc.unavailable ? {policyDocumentUnavailable: true} : {}),
             updatedAt: isoDate(policy.UpdateDate),
             tags: mapTags(policy.Tags),
         },

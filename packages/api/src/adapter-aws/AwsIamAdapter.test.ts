@@ -7,6 +7,7 @@ import {
     DeleteRoleCommand,
     DeleteUserCommand,
     GetPolicyCommand,
+    GetPolicyVersionCommand,
     GetRoleCommand,
     GetUserCommand,
     type IAMClient,
@@ -194,6 +195,66 @@ describe('AwsIamAdapter', () => {
                 expect(resource).not.toBeNull()
             })
         }
+    })
+
+    describe('inspecting a policy loads its document', () => {
+        const POLICY_ID = `policy/${policy.Arn}`
+
+        test('fetches the default version and exposes the decoded document', async () => {
+            // Roles surface a decoded trust policy, so a policy has to surface the
+            // document it was created with — that is the thing being audited.
+            const {client, sent} = stubIam((command) => {
+                if (command instanceof GetPolicyCommand) return {Policy: policy}
+                if (command instanceof GetPolicyVersionCommand) {
+                    return {PolicyVersion: {VersionId: 'v1', Document: '%7B%22Statement%22%3A%5B%5D%7D'}}
+                }
+                return {}
+            })
+            const resource = await new AwsIamAdapter(client).get(POLICY_ID)
+
+            const versionCall = sent.find((c) => c instanceof GetPolicyVersionCommand) as GetPolicyVersionCommand
+            expect(versionCall.input.PolicyArn).toBe(policy.Arn)
+            expect(versionCall.input.VersionId).toBe('v1')
+            expect(resource?.metadata.policyDocument).toBe('{"Statement":[]}')
+        })
+
+        test('leaves a document the runtime did not encode untouched', async () => {
+            // Real IAM percent-encodes the document; the local runtime returns it
+            // literal, so decoding must be a no-op rather than a corruption.
+            const {client} = stubIam((command) => {
+                if (command instanceof GetPolicyCommand) return {Policy: policy}
+                if (command instanceof GetPolicyVersionCommand) {
+                    return {PolicyVersion: {VersionId: 'v1', Document: '{"Statement":[]}'}}
+                }
+                return {}
+            })
+            const resource = await new AwsIamAdapter(client).get(POLICY_ID)
+
+            expect(resource?.metadata.policyDocument).toBe('{"Statement":[]}')
+        })
+
+        test('still inspects the policy when the version lookup fails', async () => {
+            const {client} = stubIam((command) => {
+                if (command instanceof GetPolicyCommand) return {Policy: policy}
+                if (command instanceof GetPolicyVersionCommand) {
+                    throw Object.assign(new Error('Rate exceeded'), {name: 'ThrottlingException'})
+                }
+                return {}
+            })
+            const resource = await new AwsIamAdapter(client).get(POLICY_ID)
+
+            expect(resource?.name).toBe('read-buckets')
+            expect(resource?.metadata.policyDocument).toBeUndefined()
+            expect(resource?.metadata.policyDocumentUnavailable).toBe(true)
+        })
+
+        test('does not fetch the document while listing', async () => {
+            // One GetPolicyVersion per row would turn a list into an N+1.
+            const {client, sent} = runtimeStub()
+            await new AwsIamAdapter(client).list({filters: {kind: 'policies'}})
+
+            expect(sent.some((c) => c instanceof GetPolicyVersionCommand)).toBe(false)
+        })
     })
 
     test('rejects an id that does not name a kind', async () => {
