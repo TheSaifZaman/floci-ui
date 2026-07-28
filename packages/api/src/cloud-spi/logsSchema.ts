@@ -27,6 +27,17 @@ export function awsLogsSchema(): ServiceSchema {
                 {name: 'delete', label: 'Delete log group', enabled: true, status: 'available', runtimeRequired: true},
                 {name: 'inspect', label: 'Inspect metadata', enabled: true, status: 'available', runtimeRequired: true},
             ],
+            collectionActions: [
+                {name: 'list', label: 'List log streams', enabled: true, status: 'available', runtimeRequired: true},
+                {name: 'create', label: 'Create log stream', enabled: true, status: 'available', runtimeRequired: true},
+                {name: 'delete', label: 'Delete log stream', enabled: true, status: 'available', runtimeRequired: true},
+            ],
+            // Read-only leaf, and that is the provider's shape rather than a gap:
+            // AWS has no DeleteLogEvent, and writing events from a resource
+            // browser is not something a console should offer.
+            itemActions: [
+                {name: 'list', label: 'Read log events', enabled: true, status: 'available', runtimeRequired: true},
+            ],
         },
         filters: [
             {

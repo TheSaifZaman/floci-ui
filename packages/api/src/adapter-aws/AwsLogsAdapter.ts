@@ -1,9 +1,20 @@
 import {
     type CloudWatchLogsClient,
     CreateLogGroupCommand,
+    CreateLogStreamCommand,
     DeleteLogGroupCommand,
+    DeleteLogStreamCommand,
     DescribeLogGroupsCommand,
+    DescribeLogStreamsCommand,
+    GetLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs'
+import type {
+    ChildCollection,
+    ChildItem,
+    CollectionPage,
+    DocumentStoreAdapter,
+    PageQuery,
+} from '../cloud-spi/childCollections'
 import {NotFoundError, ValidationError} from '../cloud-spi/errors'
 import {awsLogsSchema} from '../cloud-spi/logsSchema'
 import type {
@@ -14,20 +25,40 @@ import type {
     ServiceSchema,
 } from '../cloud-spi/types'
 
+/**
+ * `creationTime` is the field real AWS returns and the only one the SDK models.
+ *
+ * The local runtime sends `createdTime` instead, and the SDK deserializer drops
+ * wire fields it does not model — so that value is unrecoverable here and
+ * `createdAt` is null for every log group and stream against the emulator.
+ * Reading the emulator's spelling instead would be dead code in production and
+ * would only ever pass against hand-built stubs, which is how this shipped
+ * wrong the first time. See
+ * .claude/memory/aws-sdk-error-names-differ-from-wire-codes.md — same failure
+ * mode, different field.
+ */
 interface LogGroupShape {
     logGroupName?: string
-    createdTime?: number
+    creationTime?: number
     arn?: string
     storedBytes?: number
     metricFilterCount?: number
     retentionInDays?: number
 }
 
+function createdAtOf(record: {creationTime?: number}): string | null {
+    return record.creationTime ? new Date(record.creationTime).toISOString() : null
+}
+
 export class AwsLogsAdapter implements CloudServiceAdapter {
     readonly cloud = 'aws' as const
     readonly service = 'logs' as const
 
-    constructor(private readonly client: CloudWatchLogsClient) {}
+    readonly documents: DocumentStoreAdapter
+
+    constructor(private readonly client: CloudWatchLogsClient) {
+        this.documents = new LogGroupDocumentStore(client)
+    }
 
     schema(): ServiceSchema {
         return awsLogsSchema()
@@ -71,6 +102,116 @@ export class AwsLogsAdapter implements CloudServiceAdapter {
     }
 }
 
+interface LogStreamShape {
+    logStreamName?: string
+    arn?: string
+    creationTime?: number
+    storedBytes?: number
+    firstEventTimestamp?: number
+    lastEventTimestamp?: number
+}
+
+/**
+ * Streams are the collection level, events the leaf. There is deliberately no
+ * putItem/deleteItem/queryItems: AWS has no DeleteLogEvent, and PutLogEvents is
+ * not something a resource browser should expose.
+ */
+class LogGroupDocumentStore implements DocumentStoreAdapter {
+    constructor(private readonly client: CloudWatchLogsClient) {}
+
+    async listCollections(resourceId: string, page: PageQuery = {}): Promise<CollectionPage<ChildCollection>> {
+        const response = await this.client.send(
+            new DescribeLogStreamsCommand({
+                logGroupName: resourceId,
+                orderBy: 'LastEventTime',
+                descending: true,
+                limit: page.limit,
+                nextToken: page.cursor,
+            }),
+        )
+        return {
+            items: (response.logStreams ?? []).map((stream) => toCollection(stream, resourceId)),
+            nextCursor: response.nextToken ?? null,
+        }
+    }
+
+    async createCollection(resourceId: string, input: CreateResourceInput): Promise<ChildCollection> {
+        const name = String(input.values.name ?? '').trim()
+        if (!name) throw new ValidationError('A log stream name is required.')
+
+        await this.client.send(new CreateLogStreamCommand({logGroupName: resourceId, logStreamName: name}))
+
+        const response = await this.client.send(
+            new DescribeLogStreamsCommand({logGroupName: resourceId, logStreamNamePrefix: name}),
+        )
+        const stream = (response.logStreams ?? []).find((candidate) => candidate.logStreamName === name)
+        if (!stream) throw new NotFoundError(`Log stream ${name} was created but could not be read back.`)
+        return toCollection(stream, resourceId)
+    }
+
+    async deleteCollection(resourceId: string, collectionId: string): Promise<void> {
+        await this.client.send(new DeleteLogStreamCommand({logGroupName: resourceId, logStreamName: collectionId}))
+    }
+
+    async listItems(resourceId: string, collectionId: string, page: PageQuery = {}): Promise<CollectionPage<ChildItem>> {
+        const response = await this.client.send(
+            new GetLogEventsCommand({
+                logGroupName: resourceId,
+                logStreamName: collectionId,
+                // Without this the runtime returns the newest page, so paging
+                // forward from a fresh cursor would skip the history.
+                startFromHead: true,
+                limit: page.limit,
+                nextToken: page.cursor,
+            }),
+        )
+
+        const events = response.events ?? []
+        const forward = response.nextForwardToken ?? null
+
+        return {
+            items: events.map((event, index) => ({
+                // Real AWS gives log events no identifier — the SDK models only
+                // timestamp/message/ingestionTime, and the emulator's `eventId`
+                // is discarded by the deserializer. Position within the page is
+                // the only thing available, so it is not stable across calls and
+                // must not be used as a durable key.
+                id: `${event.timestamp ?? 0}-${index}`,
+                collectionId,
+                timestamp: event.timestamp ? new Date(event.timestamp).toISOString() : null,
+                body: {message: event.message ?? ''},
+                metadata: {
+                    ingestionTime: event.ingestionTime ? new Date(event.ingestionTime).toISOString() : null,
+                },
+            })),
+            // GetLogEvents echoes the supplied token back at the end of the
+            // stream instead of returning null, so a naive loop never
+            // terminates. Verified against the runtime on 2026-07-28.
+            nextCursor: events.length === 0 || forward === page.cursor ? null : forward,
+        }
+    }
+}
+
+function toCollection(stream: LogStreamShape, parentId: string): ChildCollection {
+    const name = stream.logStreamName ?? ''
+    return {
+        id: name,
+        name,
+        parentId,
+        createdAt: createdAtOf(stream),
+        metadata: {
+            arn: stream.arn,
+            storedBytes: stream.storedBytes ?? 0,
+            firstEventTimestamp: stream.firstEventTimestamp
+                ? new Date(stream.firstEventTimestamp).toISOString()
+                : null,
+            lastEventTimestamp: stream.lastEventTimestamp
+                ? new Date(stream.lastEventTimestamp).toISOString()
+                : null,
+        },
+    }
+}
+
 function toResource(group: LogGroupShape): CloudResource {
     const name = group.logGroupName ?? ''
     return {
@@ -80,7 +221,7 @@ function toResource(group: LogGroupShape): CloudResource {
         service: 'logs',
         type: 'log-group',
         region: null,
-        createdAt: group.createdTime ? new Date(group.createdTime).toISOString() : null,
+        createdAt: createdAtOf(group),
         metadata: {
             arn: group.arn,
             storedBytes: group.storedBytes ?? 0,
