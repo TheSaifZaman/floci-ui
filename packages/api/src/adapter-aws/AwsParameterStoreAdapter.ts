@@ -21,6 +21,9 @@ import type {
 
 type ParameterTag = {key: string; value: string}
 
+/** Tags plus whether the lookup itself failed, so the two stay distinguishable. */
+type TagLookup = {tags: ParameterTag[]; unavailable?: true}
+
 /**
  * SSM reports a missing parameter as `ParameterNotFound` with HTTP **400**, not
  * 404, so `get` matches on the error name. Matching the status instead would
@@ -138,11 +141,23 @@ export class AwsParameterStoreAdapter implements CloudServiceAdapter {
         return toResource(parameter, await this.getTags(name))
     }
 
-    private async getTags(name: string): Promise<ParameterTag[]> {
-        const res = await this.ssm.send(
-            new ListTagsForResourceCommand({ResourceType: 'Parameter', ResourceId: name}),
-        )
-        return (res.TagList ?? []).map((tag) => ({key: tag.Key ?? '', value: tag.Value ?? ''}))
+    /**
+     * Tags are enrichment, so a failure here degrades the row instead of failing
+     * the request. `list` builds every row through `Promise.all`, so an unisolated
+     * throttle or a delete race would reject the whole view and show nothing.
+     *
+     * The failure is reported as `tagsUnavailable` rather than swallowed, so an
+     * empty tag list and an unreadable one stay distinguishable.
+     */
+    private async getTags(name: string): Promise<TagLookup> {
+        try {
+            const res = await this.ssm.send(
+                new ListTagsForResourceCommand({ResourceType: 'Parameter', ResourceId: name}),
+            )
+            return {tags: (res.TagList ?? []).map((tag) => ({key: tag.Key ?? '', value: tag.Value ?? ''}))}
+        } catch {
+            return {tags: [], unavailable: true}
+        }
     }
 }
 
@@ -156,7 +171,7 @@ export class AwsParameterStoreAdapter implements CloudServiceAdapter {
  * runtime to withhold it would leak the secret. The adapter therefore never
  * issues GetParameter at all.
  */
-function toResource(parameter: ParameterMetadata, tags: ParameterTag[]): CloudResource {
+function toResource(parameter: ParameterMetadata, tagLookup: TagLookup): CloudResource {
     const name = parameter.Name ?? ''
 
     return {
@@ -180,7 +195,8 @@ function toResource(parameter: ParameterMetadata, tags: ParameterTag[]): CloudRe
             lastModifiedUser: parameter.LastModifiedUser,
             /** Tells the inspector the blank value is a policy, not a gap. */
             valueWithheld: true,
-            tags,
+            tags: tagLookup.tags,
+            ...(tagLookup.unavailable ? {tagsUnavailable: true} : {}),
         },
     }
 }

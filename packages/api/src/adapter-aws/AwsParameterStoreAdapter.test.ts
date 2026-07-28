@@ -250,6 +250,34 @@ describe('AwsParameterStoreAdapter', () => {
         expect(resource?.metadata.tags).toEqual([{key: 'env', value: 'prod'}])
     })
 
+    test('still lists parameters when the tag lookup fails', async () => {
+        // list() builds every row through Promise.all, so an unisolated tag
+        // failure — throttling, transient IAM, a delete race — would reject the
+        // whole view and show nothing rather than metadata without tags.
+        const {client} = stubSsm((command) => {
+            if (command instanceof DescribeParametersCommand) return {Parameters: [plain]}
+            throw Object.assign(new Error('Rate exceeded'), {
+                name: 'ThrottlingException',
+                $metadata: {httpStatusCode: 400},
+            })
+        })
+
+        const [resource] = await new AwsParameterStoreAdapter(client).list()
+
+        expect(resource?.id).toBe('/floci/app/region')
+        expect(resource?.metadata.tags).toEqual([])
+        // Degraded, not silent: the UI can say tags could not be read.
+        expect(resource?.metadata.tagsUnavailable).toBe(true)
+    })
+
+    test('does not claim tags are unavailable when they are simply empty', async () => {
+        const {client} = runtimeStub({describe: {Parameters: [plain]}, tags: {TagList: []}})
+        const [resource] = await new AwsParameterStoreAdapter(client).list()
+
+        expect(resource?.metadata.tags).toEqual([])
+        expect(resource?.metadata.tagsUnavailable).toBeUndefined()
+    })
+
     test('adds and removes tags against the Parameter resource type', async () => {
         const {client, sent} = stubSsm(() => ({}))
         await new AwsParameterStoreAdapter(client).updateTags('/floci/app/region', {env: 'prod', stale: null})
