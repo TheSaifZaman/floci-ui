@@ -1,8 +1,10 @@
+import {RuntimeError, ValidationError} from '../cloud-spi/errors'
 import { azure, type AzureRuntimeClient } from '../azure'
 import { azureServerlessSchema } from '../cloud-spi/serverlessSchema'
 import type {
     CloudResource,
     CloudServiceAdapter,
+    CloudServiceDescriptorOverride,
     CreateResourceInput,
     ResourceQuery,
     ServerlessInvokeResult,
@@ -38,6 +40,19 @@ export class AzureServerlessAdapter implements CloudServiceAdapter {
 
     constructor(private readonly client: AzureRuntimeClient = azure) { }
 
+    /**
+     * floci-az answers 501 NotImplemented on /functions, so this adapter cannot
+     * currently serve a request even though it is registered. Reporting
+     * coming_soon keeps the nav honest; remove this once the runtime ships the
+     * endpoint and the adapter's own tests exercise it against a real response.
+     */
+    descriptorOverride(): CloudServiceDescriptorOverride {
+        return {
+            availability: 'coming_soon',
+            reason: 'The Floci-AZ runtime returns 501 NotImplemented for the Azure Functions endpoint.',
+        }
+    }
+
     schema(): ServiceSchema {
         return azureServerlessSchema()
     }
@@ -71,7 +86,7 @@ export class AzureServerlessAdapter implements CloudServiceAdapter {
         const location = stringValue(input.values.location)
         const functionAppName = stringValue(input.values.functionAppName)
 
-        if (!functionName) throw new Error('functionName is required')
+        if (!functionName) throw new ValidationError('functionName is required')
 
         const body = await this.azureJson<AzureFunctionRecord>(
             '/functions',
@@ -88,7 +103,7 @@ export class AzureServerlessAdapter implements CloudServiceAdapter {
             },
         )
 
-        if (!body) throw new Error('Azure Functions create returned an empty response')
+        if (!body) throw new RuntimeError('Azure Functions create returned an empty response')
         return toFunctionResource(body)
     }
 
