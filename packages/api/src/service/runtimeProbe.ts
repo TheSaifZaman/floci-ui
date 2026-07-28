@@ -16,7 +16,8 @@ export type RuntimeProbe = () => Promise<void>
 export const runtimeProbes: Record<CloudProvider, RuntimeProbe> = {
     // Floci core answers on / (S3 ListBuckets), so any non-5xx means it is up.
     aws: () => probeHttp(awsEndpoint(), 'Floci core'),
-    // Floci-AZ exposes a real health endpoint.
+    // Each runtime names its health endpoint differently: core and Floci-AZ use
+    // /_floci/health, Floci-GCP uses /_floci-gcp/health (see GcpRestRuntimeClient).
     azure: async () => {
         await azure.fetch('/_floci/health', {method: 'GET'})
     },

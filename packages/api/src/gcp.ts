@@ -1,5 +1,8 @@
 import {RuntimeUnavailableError, httpStatusToCloudError} from './cloud-spi/errors'
 
+/** Floci-GCP's health endpoint; deliberately not the `/_floci/health` core uses. */
+const GCP_HEALTH_PATH = '/_floci-gcp/health'
+
 export interface GcpRuntimeFetchOptions {
     emptyOnNotFound?: boolean
 }
@@ -61,14 +64,13 @@ export class GcpRestRuntimeClient implements GcpRuntimeClient {
     }
 
     /**
-     * Liveness probe.
+     * Liveness probe against the runtime's own health endpoint.
      *
-     * The runtime exposes no health endpoint — both `/` and `/_floci/health`
-     * return 404 — so this probes a real GCS contract instead of inventing one.
-     * Any response under 500 proves the process is up and routing.
+     * Note the path is `/_floci-gcp/health`, not the `/_floci/health` that Floci
+     * core uses — `/` and `/_floci/health` both 404 on this runtime.
      */
     async health(): Promise<void> {
-        const url = `${this.endpoint}/storage/v1/b?project=${encodeURIComponent(this.project)}`
+        const url = `${this.endpoint}${GCP_HEALTH_PATH}`
         let res: Response
         try {
             res = await globalThis.fetch(url, {method: 'GET'})

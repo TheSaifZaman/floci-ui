@@ -406,6 +406,8 @@ Check the runtime directly:
 
 ```bash
 curl http://localhost:4566/_floci/health
+curl http://localhost:4577/_floci/health
+curl http://localhost:4588/_floci-gcp/health
 curl http://localhost:4501/api/clouds/aws/status
 curl http://localhost:4501/api/clouds/azure/status
 curl http://localhost:4501/api/clouds/gcp/status

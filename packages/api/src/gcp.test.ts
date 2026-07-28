@@ -96,16 +96,17 @@ describe('GcpRestRuntimeClient.json', () => {
 })
 
 describe('GcpRestRuntimeClient.health', () => {
-    test('probes a real storage contract rather than an invented endpoint', async () => {
-        const calls = stubFetch(() => new Response('{"items":[]}', {status: 200}))
+    test("probes the runtime's own health endpoint", async () => {
+        const calls = stubFetch(() => new Response('{"services":{"gcs":"running"}}', {status: 200}))
         await client().health()
 
-        expect(calls[0]).toBe(`${ENDPOINT}/storage/v1/b?project=floci-local`)
+        // Deliberately not /_floci/health, which this runtime 404s.
+        expect(calls[0]).toBe(`${ENDPOINT}/_floci-gcp/health`)
     })
 
     test('treats any non-5xx as reachable', async () => {
-        // The runtime 404s on / and /_floci/health, so "responded at all" is the
-        // signal — a 401 or 404 still proves the process is up and routing.
+        // "Responded at all" is the signal — an older runtime without this exact
+        // path still proves the process is up and routing.
         for (const status of [200, 401, 403, 404]) {
             stubFetch(() => new Response('', {status}))
             await expect(client().health()).resolves.toBeUndefined()
