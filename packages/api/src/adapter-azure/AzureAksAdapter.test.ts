@@ -147,6 +147,25 @@ describe('AzureAksAdapter', () => {
         await expect(a.delete('rg-app/prod')).rejects.toThrow(NotSupportedError)
     })
 
+    test('sends the accept header the other Azure adapters send', async () => {
+        // azureJson and cosmosJson both set it, and some ARM endpoints are
+        // Accept-sensitive; diverging here makes error handling inconsistent.
+        const calls = runtimeStub()
+        await adapter().list()
+
+        const headers = calls[0]?.init?.headers as Record<string, string> | undefined
+        expect(headers?.accept).toBe('application/json')
+    })
+
+    test('treats an empty ARM response as no cluster rather than a parse error', async () => {
+        stubFetch((url) => {
+            if (url.endsWith('/subscriptions')) return json({value: [{subscriptionId: SUB}]})
+            return new Response(null, {status: 204})
+        })
+
+        await expect(adapter().get('rg-app/prod')).resolves.toBeNull()
+    })
+
     test('advertises only list and inspect', () => {
         expect(adapter().schema().actions).toEqual(['list', 'inspect'])
     })

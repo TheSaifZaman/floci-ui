@@ -111,9 +111,27 @@ export class AzureAksAdapter implements CloudServiceAdapter {
         return id
     }
 
+    /**
+     * Mirrors the `azureJson`/`cosmosJson` helpers the other Azure adapters use:
+     * ARM endpoints can be Accept-sensitive, and a 204 carries no body to parse.
+     *
+     * Several near-identical copies of this now exist under adapter-azure/. Worth
+     * lifting onto AzureRuntimeClient once the open Azure PRs have merged — doing
+     * it in parallel branches would only conflict.
+     */
     private async json<T>(path: string, init: RequestInit = {}, options = {}): Promise<T | null> {
-        const res = await this.client.fetch(path, init, options)
-        if (!res) return null
+        const res = await this.client.fetch(
+            path,
+            {
+                ...init,
+                headers: {
+                    accept: 'application/json',
+                    ...(init.headers ?? {}),
+                },
+            },
+            options,
+        )
+        if (!res || res.status === 204) return null
 
         const text = await res.text()
         if (!text) return null
