@@ -117,7 +117,7 @@ export class AzureComputeAdapter implements CloudServiceAdapter {
                 'name must start with a letter or digit and contain only letters, digits, hyphens, underscores and periods',
             )
         }
-        const resourceGroup = requiredString(input.values.resourceGroup, 'resourceGroup')
+        const requestedGroup = requiredString(input.values.resourceGroup, 'resourceGroup')
         const vmSize = requiredOneOf(input.values.vmSize, AZURE_VM_SIZES, 'vmSize')
         const imageLabel = requiredOneOf(
             input.values.image,
@@ -127,7 +127,7 @@ export class AzureComputeAdapter implements CloudServiceAdapter {
         const location = optionalOneOf(input.values.location, AZURE_LOCATIONS, 'location') ?? 'eastus'
         const adminUsername = optionalString(input.values.adminUsername, 'adminUsername') ?? 'azureuser'
 
-        await this.assertResourceGroupExists(resourceGroup)
+        const resourceGroup = await this.resolveResourceGroup(requestedGroup)
 
         const path = await this.vmPath(resourceGroup, name)
         await this.json(`${path}?api-version=${API_VERSION}`, {
@@ -194,19 +194,29 @@ export class AzureComputeAdapter implements CloudServiceAdapter {
     }
 
     /**
-     * The runtime creates a VM in a nonexistent resource group and returns 201,
-     * while real Azure answers ResourceGroupNotFound. Checking here stops the
-     * console creating a resource that could never exist against a real provider.
+     * Resolve a caller-supplied resource group to the spelling the runtime uses,
+     * failing if it does not exist.
+     *
+     * Two reasons this is not a plain equality check. The runtime creates a VM in a
+     * nonexistent resource group and returns 201 while real Azure answers
+     * ResourceGroupNotFound, so the existence check has to live here. And Azure
+     * treats these names case-insensitively, so `RG-App` must match `rg-app` — but
+     * the *runtime's* casing is what gets used, because the resource id is
+     * `resourceGroup/name` and echoing the caller's casing would emit an id that
+     * does not match the one `list()` reports.
      */
-    private async assertResourceGroupExists(resourceGroup: string): Promise<void> {
+    private async resolveResourceGroup(resourceGroup: string): Promise<string> {
         const subscription = await this.subscription()
         const body = await this.json<ArmList<{name?: string}>>(
             `/subscriptions/${subscription}/resourceGroups?api-version=${RESOURCE_API_VERSION}`,
         )
-        const exists = (body?.value ?? []).some((group) => group.name === resourceGroup)
-        if (!exists) {
+        const match = (body?.value ?? []).find(
+            (group) => group.name?.toLowerCase() === resourceGroup.toLowerCase(),
+        )
+        if (!match?.name) {
             throw new ValidationError(`resource group ${resourceGroup} does not exist; create it before adding a VM`)
         }
+        return match.name
     }
 
     /**

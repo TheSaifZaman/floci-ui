@@ -195,6 +195,31 @@ describe('AzureComputeAdapter', () => {
         ).rejects.toThrow(ValidationError)
     })
 
+    test('accepts a resource group whose case differs from the runtime', async () => {
+        // Azure treats resource group names as case-insensitive, so rejecting
+        // "RG-App" when "rg-app" exists would block a create that should succeed.
+        const calls = runtimeStub()
+        await adapter().create({
+            values: {name: 'web', resourceGroup: 'RG-App', vmSize: 'Standard_B1s', image: 'Debian 11'},
+        })
+
+        expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true)
+    })
+
+    test("uses the runtime's spelling of the resource group, not the caller's", async () => {
+        // The id is `resourceGroup/name`, so echoing the caller's casing would emit
+        // an id that does not match what list() returns and inspect would 404.
+        const calls = runtimeStub()
+        const resource = await adapter().create({
+            values: {name: 'web', resourceGroup: 'RG-App', vmSize: 'Standard_B1s', image: 'Debian 11'},
+        })
+
+        const put = calls.find((c) => c.init?.method === 'PUT')
+        expect(put?.url).toContain('/resourceGroups/rg-app/')
+        expect(put?.url).not.toContain('RG-App')
+        expect(resource.id).toBe('rg-app/web')
+    })
+
     test('requires the fields the schema marks required', async () => {
         runtimeStub()
         const a = adapter()
