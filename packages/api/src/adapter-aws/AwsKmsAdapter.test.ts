@@ -171,6 +171,85 @@ describe('AwsKmsAdapter', () => {
         expect(command.input.KeySpec).toBe('SYMMETRIC_DEFAULT')
     })
 
+    describe('key usage and spec compatibility', () => {
+        // The local runtime accepts SIGN_VERIFY with SYMMETRIC_DEFAULT and
+        // ENCRYPT_DECRYPT with ECC_NIST_P256 and returns 200, but real KMS rejects
+        // both. Only these tests can hold the line, so they encode the provider's
+        // rules rather than the emulator's.
+        test('defaults the spec to one that is valid for the chosen usage', async () => {
+            const cases: Array<[string, string]> = [
+                ['ENCRYPT_DECRYPT', 'SYMMETRIC_DEFAULT'],
+                ['SIGN_VERIFY', 'RSA_2048'],
+                ['GENERATE_VERIFY_MAC', 'HMAC_256'],
+            ]
+
+            for (const [keyUsage, expectedSpec] of cases) {
+                const {client, sent} = stubKms(() => ({KeyMetadata: keyMetadata}))
+                await new AwsKmsAdapter(client).create({values: {keyUsage}})
+
+                expect(String((sent[0] as CreateKeyCommand).input.KeySpec)).toBe(expectedSpec)
+            }
+        })
+
+        test('rejects a spec that the chosen usage cannot use', async () => {
+            const cases: Array<[string, string]> = [
+                ['SIGN_VERIFY', 'SYMMETRIC_DEFAULT'],
+                ['ENCRYPT_DECRYPT', 'ECC_NIST_P256'],
+                ['ENCRYPT_DECRYPT', 'HMAC_256'],
+                ['GENERATE_VERIFY_MAC', 'RSA_2048'],
+            ]
+
+            for (const [keyUsage, keySpec] of cases) {
+                // Returns valid metadata, so a create that reaches the runtime
+                // succeeds — the only way this rejects is the compatibility check.
+                const {client, sent} = stubKms(() => ({KeyMetadata: keyMetadata}))
+                const adapter = new AwsKmsAdapter(client)
+
+                await expect(adapter.create({values: {keyUsage, keySpec}})).rejects.toThrow(ValidationError)
+                expect(sent, `${keyUsage}/${keySpec} must be rejected before reaching KMS`).toHaveLength(0)
+            }
+        })
+
+        test('accepts every pair the provider considers valid', async () => {
+            const cases: Array<[string, string]> = [
+                ['ENCRYPT_DECRYPT', 'SYMMETRIC_DEFAULT'],
+                ['ENCRYPT_DECRYPT', 'RSA_2048'],
+                ['ENCRYPT_DECRYPT', 'RSA_4096'],
+                ['SIGN_VERIFY', 'RSA_2048'],
+                ['SIGN_VERIFY', 'RSA_4096'],
+                ['SIGN_VERIFY', 'ECC_NIST_P256'],
+                ['GENERATE_VERIFY_MAC', 'HMAC_256'],
+            ]
+
+            for (const [keyUsage, keySpec] of cases) {
+                const {client, sent} = stubKms(() => ({KeyMetadata: keyMetadata}))
+                await new AwsKmsAdapter(client).create({values: {keyUsage, keySpec}})
+
+                expect(String((sent[0] as CreateKeyCommand).input.KeySpec)).toBe(keySpec)
+            }
+        })
+    })
+
+    test('follows the tag pages so a heavily tagged key is not truncated', async () => {
+        let tagCall = 0
+        const {client} = stubKms((command) => {
+            if (command instanceof ListKeysCommand) return {Keys: [{KeyId: KEY_ID, KeyArn: KEY_ARN}]}
+            if (command instanceof DescribeKeyCommand) return {KeyMetadata: keyMetadata}
+            tagCall += 1
+            if (tagCall === 1) {
+                return {Tags: [{TagKey: 'a', TagValue: '1'}], Truncated: true, NextMarker: 'tag-page-2'}
+            }
+            return {Tags: [{TagKey: 'b', TagValue: '2'}], Truncated: false}
+        })
+
+        const [resource] = await new AwsKmsAdapter(client).list()
+
+        expect(resource?.metadata.tags).toEqual([
+            {key: 'a', value: '1'},
+            {key: 'b', value: '2'},
+        ])
+    })
+
     test('rejects a key usage the schema does not offer', async () => {
         const adapter = new AwsKmsAdapter(stubKms(() => ({})).client)
 

@@ -15,6 +15,7 @@ import {
     KMS_DESCRIPTION_MAX_LENGTH,
     KMS_KEY_SPECS,
     KMS_KEY_USAGES,
+    KMS_SPECS_BY_USAGE,
 } from '../cloud-spi/kmsSchema'
 import type {
     CloudResource,
@@ -60,7 +61,7 @@ export class AwsKmsAdapter implements CloudServiceAdapter {
         }
 
         const keyUsage = oneOf(input.values.keyUsage, KMS_KEY_USAGES, 'keyUsage')
-        const keySpec = oneOf(input.values.keySpec, KMS_KEY_SPECS, 'keySpec')
+        const keySpec = keySpecFor(keyUsage, input.values.keySpec)
 
         const res = await this.kms.send(
             new CreateKeyCommand({
@@ -134,9 +135,20 @@ export class AwsKmsAdapter implements CloudServiceAdapter {
         }
     }
 
+    /** Paged like ListKeys, so a heavily tagged key would otherwise be truncated. */
     private async getTags(id: string): Promise<KeyTag[]> {
-        const res = await this.kms.send(new ListResourceTagsCommand({KeyId: id}))
-        return (res.Tags ?? []).map((tag) => ({key: tag.TagKey ?? '', value: tag.TagValue ?? ''}))
+        const tags: KeyTag[] = []
+        let marker: string | undefined
+
+        do {
+            const res = await this.kms.send(new ListResourceTagsCommand({KeyId: id, ...(marker ? {Marker: marker} : {})}))
+            for (const tag of res.Tags ?? []) {
+                tags.push({key: tag.TagKey ?? '', value: tag.TagValue ?? ''})
+            }
+            marker = res.Truncated ? res.NextMarker : undefined
+        } while (marker)
+
+        return tags
     }
 }
 
@@ -194,12 +206,37 @@ function optionalString(value: unknown, field: string): string | undefined {
 }
 
 /**
+ * Resolve the key spec for a usage, defaulting to the first spec that usage
+ * supports rather than to a fixed symmetric default.
+ *
+ * A fixed default would pair SIGN_VERIFY with SYMMETRIC_DEFAULT, which real KMS
+ * rejects — and the local runtime accepts, so the failure would only appear
+ * against a real provider.
+ */
+function keySpecFor(keyUsage: (typeof KMS_KEY_USAGES)[number], raw: unknown): (typeof KMS_KEY_SPECS)[number] {
+    const allowed = KMS_SPECS_BY_USAGE[keyUsage]
+    const requested = oneOf(raw, KMS_KEY_SPECS, 'keySpec', allowed[0])
+
+    if (!(allowed as readonly string[]).includes(requested)) {
+        throw new ValidationError(
+            `keySpec ${requested} is not valid for keyUsage ${keyUsage}; use one of ${allowed.join(', ')}`,
+        )
+    }
+    return requested
+}
+
+/**
  * Keeps create honest about the schema: a value the form never offers would be
  * rejected by KMS anyway, and failing here gives a typed error instead of a 400.
  */
-function oneOf<T extends readonly string[]>(value: unknown, allowed: T, field: string): T[number] {
+function oneOf<T extends readonly string[]>(
+    value: unknown,
+    allowed: T,
+    field: string,
+    fallback: T[number] = allowed[0] as T[number],
+): T[number] {
     const raw = optionalString(value, field)
-    if (raw === undefined) return allowed[0] as T[number]
+    if (raw === undefined) return fallback
     if (!allowed.includes(raw)) {
         throw new ValidationError(`${field} must be one of ${allowed.join(', ')}`)
     }

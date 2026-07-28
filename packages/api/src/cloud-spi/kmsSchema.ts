@@ -24,6 +24,21 @@ export const KMS_KEY_SPECS = [
     'HMAC_256',
 ] as const
 
+/**
+ * Which specs each usage can actually be created with, and the spec to use when
+ * the caller picks a usage but no spec.
+ *
+ * KMS rejects a mismatched pair — a SIGN_VERIFY key cannot be SYMMETRIC_DEFAULT,
+ * and only HMAC specs can generate MACs. The local runtime is more permissive and
+ * returns 200 for pairs real KMS refuses, so this table, not the runtime, is the
+ * authority. The first entry of each list is the default.
+ */
+export const KMS_SPECS_BY_USAGE = {
+    ENCRYPT_DECRYPT: ['SYMMETRIC_DEFAULT', 'RSA_2048', 'RSA_4096'],
+    SIGN_VERIFY: ['RSA_2048', 'RSA_4096', 'ECC_NIST_P256'],
+    GENERATE_VERIFY_MAC: ['HMAC_256'],
+} as const satisfies Record<(typeof KMS_KEY_USAGES)[number], readonly (typeof KMS_KEY_SPECS)[number][]>
+
 /** KMS caps a key description at 8192 characters. */
 export const KMS_DESCRIPTION_MAX_LENGTH = 8192
 
@@ -57,6 +72,8 @@ export function awsKmsSchema(): ServiceSchema {
                 label: 'Key Spec',
                 type: 'select',
                 required: false,
+                description:
+                    'Must match the key usage: symmetric or RSA to encrypt, RSA or ECC to sign, HMAC to generate MACs. Left unset, a valid spec is chosen for the usage.',
                 options: KMS_KEY_SPECS.map((value) => ({label: value, value})),
             },
         ],
