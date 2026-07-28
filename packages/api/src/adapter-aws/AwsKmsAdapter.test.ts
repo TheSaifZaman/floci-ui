@@ -116,6 +116,35 @@ describe('AwsKmsAdapter', () => {
         expect(resource?.metadata.tags).toEqual([{key: 'env', value: 'prod'}])
     })
 
+    test('still lists keys when the tag lookup fails', async () => {
+        // list() builds every row through Promise.all, so an unisolated tag
+        // failure would reject the whole view and show nothing, when the key
+        // metadata was available all along.
+        const {client} = stubKms((command) => {
+            if (command instanceof ListKeysCommand) return {Keys: [{KeyId: KEY_ID, KeyArn: KEY_ARN}]}
+            if (command instanceof DescribeKeyCommand) return {KeyMetadata: keyMetadata}
+            throw Object.assign(new Error('Rate exceeded'), {
+                name: 'ThrottlingException',
+                $metadata: {httpStatusCode: 400},
+            })
+        })
+
+        const [resource] = await new AwsKmsAdapter(client).list()
+
+        expect(resource?.id).toBe(KEY_ID)
+        expect(resource?.metadata.tags).toEqual([])
+        // Degraded, not silent.
+        expect(resource?.metadata.tagsUnavailable).toBe(true)
+    })
+
+    test('does not claim tags are unavailable when a key simply has none', async () => {
+        const {client} = runtimeStub()
+        const [resource] = await new AwsKmsAdapter(client).list()
+
+        expect(resource?.metadata.tags).toEqual([])
+        expect(resource?.metadata.tagsUnavailable).toBeUndefined()
+    })
+
     test('filters the list by key id or description', async () => {
         // The name is an opaque uuid, so a search that ignored the description
         // would be unusable.

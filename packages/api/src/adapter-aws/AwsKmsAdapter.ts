@@ -27,6 +27,9 @@ import type {
 
 type KeyTag = {key: string; value: string}
 
+/** Tags plus whether the lookup itself failed, so the two stay distinguishable. */
+type TagLookup = {tags: KeyTag[]; unavailable?: true}
+
 /**
  * The shortest deletion window KMS accepts. Deletion is irreversible once it
  * completes, so the console never offers a longer wait than it has to — but it
@@ -73,7 +76,7 @@ export class AwsKmsAdapter implements CloudServiceAdapter {
         if (!res.KeyMetadata) throw new ValidationError('KMS did not return metadata for the created key')
 
         // A brand new key has no tags, so this skips the ListResourceTags call.
-        return toResource(res.KeyMetadata, [])
+        return toResource(res.KeyMetadata, {tags: []})
     }
 
     /**
@@ -135,24 +138,40 @@ export class AwsKmsAdapter implements CloudServiceAdapter {
         }
     }
 
-    /** Paged like ListKeys, so a heavily tagged key would otherwise be truncated. */
-    private async getTags(id: string): Promise<KeyTag[]> {
+    /**
+     * Paged like ListKeys, so a heavily tagged key would otherwise be truncated.
+     *
+     * Tags are enrichment, so a failure degrades the row rather than the request:
+     * `list` builds every row through `Promise.all`, so an unisolated throttle
+     * would reject the whole view. Isolating it here also stops a tag 404 — a key
+     * deleted mid-list — from reaching `describe`'s catch and silently dropping
+     * the key. The failure is reported rather than swallowed, so an untagged key
+     * and an unreadable one stay distinguishable.
+     */
+    private async getTags(id: string): Promise<TagLookup> {
         const tags: KeyTag[] = []
         let marker: string | undefined
 
-        do {
-            const res = await this.kms.send(new ListResourceTagsCommand({KeyId: id, ...(marker ? {Marker: marker} : {})}))
-            for (const tag of res.Tags ?? []) {
-                tags.push({key: tag.TagKey ?? '', value: tag.TagValue ?? ''})
-            }
-            marker = res.Truncated ? res.NextMarker : undefined
-        } while (marker)
+        try {
+            do {
+                const res = await this.kms.send(
+                    new ListResourceTagsCommand({KeyId: id, ...(marker ? {Marker: marker} : {})}),
+                )
+                for (const tag of res.Tags ?? []) {
+                    tags.push({key: tag.TagKey ?? '', value: tag.TagValue ?? ''})
+                }
+                marker = res.Truncated ? res.NextMarker : undefined
+            } while (marker)
+        } catch {
+            // Keep whatever pages already arrived rather than discarding them.
+            return {tags, unavailable: true}
+        }
 
-        return tags
+        return {tags}
     }
 }
 
-function toResource(metadata: KeyMetadata, tags: KeyTag[]): CloudResource {
+function toResource(metadata: KeyMetadata, tagLookup: TagLookup): CloudResource {
     const id = metadata.KeyId ?? ''
 
     return {
@@ -178,7 +197,8 @@ function toResource(metadata: KeyMetadata, tags: KeyTag[]): CloudResource {
             encryptionAlgorithms: metadata.EncryptionAlgorithms,
             signingAlgorithms: metadata.SigningAlgorithms,
             multiRegion: metadata.MultiRegion,
-            tags,
+            tags: tagLookup.tags,
+            ...(tagLookup.unavailable ? {tagsUnavailable: true} : {}),
         },
     }
 }
