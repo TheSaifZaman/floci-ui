@@ -45,9 +45,10 @@ export interface ServiceCatalogMetadata {
     /** Defaults to the catalog key. A leading '/' marks a page outside Cloud Explorer. */
     route?: string
     /**
-     * Per-cloud route override. Needed when one category is served by a legacy
-     * standalone page on one cloud and by Cloud Explorer on another — AWS secrets
-     * still live at /secretsmanager while Azure Key Vault is a normal explorer route.
+     * Per-cloud route override. Needed while a service has a bespoke page on one
+     * cloud and the generic explorer on another — AWS secrets still live at
+     * /secretsmanager while Azure Key Vault and GCP Secret Manager are normal
+     * explorer routes. Delete the override once the bespoke page is migrated.
      */
     routeByCloud?: Partial<Record<CloudProvider, string>>
     /**
@@ -73,17 +74,15 @@ export const SERVICE_CATALOG = {
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
     secrets: {
         displayName: 'Secrets Manager',
-        displayNameByCloud: {azure: 'Key Vault'},
+        // Azure's product is "Key Vault"; GCP's is "Secret Manager", singular.
+        displayNameByCloud: {azure: 'Key Vault', gcp: 'Secret Manager'},
         iconKey: 'secrets',
         group: 'Security',
         order: 10,
-        route: '/secretsmanager',
-        // Azure Key Vault is a normal Cloud Explorer service, so it uses the catalog
-        // slug rather than the legacy standalone page AWS still points at.
-        routeByCloud: {azure: 'secrets'},
-        // Migration debt: the AWS Secrets Manager page still lives outside Cloud
-        // Explorer, so there is no adapter to derive availability from.
-        legacyAvailability: {aws: 'available'},
+        // AWS keeps its dedicated page until value-reveal exists as a row action;
+        // Azure and GCP go through the generic explorer today. No legacyAvailability
+        // any more — every cloud here now has a real adapter to derive it from.
+        routeByCloud: {aws: '/secretsmanager'},
     },
 } as const satisfies Record<string, ServiceCatalogMetadata>
 

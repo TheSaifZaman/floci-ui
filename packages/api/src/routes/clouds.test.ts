@@ -478,13 +478,13 @@ describe('service descriptors', () => {
         expect(serverless.reason).toContain('501')
     })
 
-    test('keeps the legacy Secrets Manager page available on AWS only', async () => {
+    test('routes AWS secrets to its bespoke page and GCP to the generic explorer', async () => {
         const aws = await (await appWithRoutes().request('/api/clouds/aws/services')).json()
         const gcp = await (await appWithRoutes().request('/api/clouds/gcp/services')).json()
         const secretsFor = (body: Array<{service: string}>) => body.find((d) => d.service === 'secrets')
 
-        expect(secretsFor(aws)).toMatchObject({availability: 'available', route: '/secretsmanager'})
-        expect(secretsFor(gcp)).toMatchObject({availability: 'coming_soon'})
+        expect(secretsFor(aws)).toMatchObject({route: '/secretsmanager'})
+        expect(secretsFor(gcp)).toMatchObject({route: 'secrets'})
     })
 })
 

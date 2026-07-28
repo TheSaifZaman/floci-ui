@@ -147,12 +147,23 @@ export interface ServiceSchema {
     columns: TableColumnSchema[]
 }
 
+export type KnownResourceType =
+    | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database'
+    | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
+    | 'queue' | 'fifo-queue' | 'topic' | 'secret'
+
 export interface CloudResource {
     id: string
     name: string
     cloud: CloudProvider
     service: CloudServiceType
-    type: 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database' | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function' | 'secret'
+    /**
+     * Provider resource kind, kebab-case. Open by design: nothing dispatches
+     * exhaustively on it, so a closed union would mean editing two packages per
+     * adapter for no safety. `CloudServiceType` stays closed — that one is
+     * route-addressable.
+     */
+    type: KnownResourceType | (string & {})
     region: string | null
     createdAt: string | null
     status?: string | null
