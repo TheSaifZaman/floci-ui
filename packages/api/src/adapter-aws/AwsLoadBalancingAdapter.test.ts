@@ -185,13 +185,13 @@ describe('AwsLoadBalancingAdapter', () => {
         expect(resource.id).toBe(ARN)
     })
 
-    test('requires at least two subnets in different zones', async () => {
-        // ELB rejects a single-subnet application load balancer, so saying so here
-        // is clearer than the provider's error.
+    test('requires at least two subnet ids', async () => {
+        // Only the count is enforced. The AZ requirement is ELB's, and checking it
+        // would mean calling EC2 from this adapter, so the message must not claim it.
         const adapter = new AwsLoadBalancingAdapter(runtimeStub().client)
 
         await expect(adapter.create({values: {...validValues, subnets: 'subnet-only'}})).rejects.toThrow(
-            new ValidationError('subnets must list at least two subnet ids in different availability zones'),
+            new ValidationError('subnets must list at least two subnet ids'),
         )
     })
 
