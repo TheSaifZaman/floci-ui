@@ -1,11 +1,13 @@
 /**
  * Google's REST APIs answer mutations with a long-running-operation envelope
- * rather than the resource, and the shape differs per service:
+ * rather than the resource, and the shape differs per service. All three are
+ * present on the local runtime:
  *
- *   - Cloud Functions / GKE / Cloud Run: `{done, response: <resource>}`
- *   - Cloud SQL (`sql#operation`): `{status: 'DONE', targetId: <resource name>}`
- *     with no embedded resource, so the caller must re-read it
+ *   - Cloud Functions / Cloud Run: `{done, response: <resource>}`
+ *   - Cloud SQL (`sql#operation`): `{status: 'DONE', targetId: <name>}`
+ *   - GKE: `{status: 'DONE', operationType: 'CREATE_CLUSTER', targetLink: <path>}`
  *
+ * Only the first embeds the resource; the others name it and expect a re-read.
  * These helpers keep that discrimination in one place instead of each adapter
  * guessing whether it received a resource or a receipt for one.
  */
@@ -19,6 +21,8 @@ export interface GcpOperationEnvelope<T> {
     status?: string
     targetId?: string
     operationType?: string
+    /** GKE: a resource path whose last segment is the name. */
+    targetLink?: string
     error?: unknown
 }
 
@@ -45,8 +49,14 @@ export function operationResponse<T>(payload: GcpOperationEnvelope<T> | T | null
     return envelope.response ?? null
 }
 
-/** The resource name an operation acted on, when it reports one. */
+/**
+ * The resource name an operation acted on, when it reports one. Accepts either a
+ * bare id (Cloud SQL) or a resource path (GKE), returning the final segment.
+ */
 export function operationTargetId<T>(payload: GcpOperationEnvelope<T> | T | null): string | null {
     if (!payload || !isOperationEnvelope(payload)) return null
-    return (payload as GcpOperationEnvelope<T>).targetId ?? null
+    const envelope = payload as GcpOperationEnvelope<T>
+    if (envelope.targetId) return envelope.targetId
+    if (envelope.targetLink) return envelope.targetLink.split('/').pop() ?? null
+    return null
 }
