@@ -215,6 +215,70 @@ describe('AzureNetworkingAdapter', () => {
         await expect(a.create({values: {...validValues, addressPrefix: 'not-a-cidr'}})).rejects.toThrow(ValidationError)
     })
 
+    test('rejects a CIDR whose octets or prefix length are out of range', async () => {
+        // A digits-and-slashes pattern accepts 999.999.999.999/99, which then fails
+        // at ARM with an opaque runtime error instead of a clear ValidationError.
+        runtimeStub()
+        const a = adapter()
+
+        for (const cidr of ['999.999.999.999/99', '256.0.0.0/16', '10.0.0.0/33', '10.0.0/16', '10.0.0.0/']) {
+            await expect(
+                a.create({values: {...validValues, addressPrefix: cidr}}),
+                `${cidr} must be rejected`,
+            ).rejects.toThrow(ValidationError)
+        }
+    })
+
+    test('accepts CIDRs at the edges of the valid range', async () => {
+        runtimeStub()
+        const a = adapter()
+
+        for (const cidr of ['0.0.0.0/0', '255.255.255.255/32', '10.0.0.0/16', '192.168.1.0/24']) {
+            await expect(a.create({values: {...validValues, addressPrefix: cidr}}), `${cidr} must be accepted`)
+                .resolves.toBeDefined()
+        }
+    })
+
+    test('rejects a subnet CIDR that is out of range too', async () => {
+        runtimeStub()
+
+        await expect(
+            adapter().create({values: {...validValues, subnetName: 'web', subnetPrefix: '10.0.1.0/33'}}),
+        ).rejects.toThrow(ValidationError)
+    })
+
+    test('enforces the Azure VNet name rules', async () => {
+        // Azure requires 2-64 characters, starting with a letter or digit and
+        // ending with a letter, digit or underscore. A one-character name or a
+        // trailing hyphen only fails at the ARM PUT otherwise.
+        runtimeStub()
+        const a = adapter()
+
+        for (const name of ['a', 'core-', 'core.', '-core', '.core']) {
+            await expect(a.create({values: {...validValues, name}}), `${name} must be rejected`).rejects.toThrow(
+                ValidationError,
+            )
+        }
+        for (const name of ['ab', 'core_net', 'core-net', 'core.net', 'a1']) {
+            await expect(a.create({values: {...validValues, name}}), `${name} must be accepted`).resolves.toBeDefined()
+        }
+    })
+
+    test('sends the accept header and tolerates an empty ARM body', async () => {
+        // Matches the azureJson/cosmosJson helpers the other Azure adapters use:
+        // ARM endpoints can be Accept-sensitive, and a 204 has no body to parse.
+        const calls = stubFetch((url, init) => {
+            if (url.endsWith('/subscriptions')) return json({value: [{subscriptionId: SUB}]})
+            if (init?.method === 'DELETE') return new Response(null, {status: 204})
+            return json({value: [vnet('core')]})
+        })
+
+        await expect(adapter().delete('rg-app/core')).resolves.toBeUndefined()
+
+        const headers = calls[0]?.init?.headers as Record<string, string> | undefined
+        expect(headers?.accept).toBe('application/json')
+    })
+
     test('rejects a location the schema does not offer', async () => {
         runtimeStub()
 

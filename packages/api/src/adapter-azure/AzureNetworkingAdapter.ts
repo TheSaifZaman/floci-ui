@@ -1,6 +1,11 @@
 import {azure, type AzureRuntimeClient} from '../azure'
 import {RuntimeError, ValidationError} from '../cloud-spi/errors'
-import {AZURE_VNET_LOCATIONS, CIDR_PATTERN, azureNetworkingSchema} from '../cloud-spi/networkingSchema'
+import {
+    AZURE_VNET_LOCATIONS,
+    AZURE_VNET_NAME_PATTERN,
+    CIDR_PATTERN,
+    azureNetworkingSchema,
+} from '../cloud-spi/networkingSchema'
 import type {
     CloudResource,
     CloudServiceAdapter,
@@ -81,6 +86,11 @@ export class AzureNetworkingAdapter implements CloudServiceAdapter {
 
     async create(input: CreateResourceInput): Promise<CloudResource> {
         const name = requiredString(input.values.name, 'name')
+        if (!new RegExp(AZURE_VNET_NAME_PATTERN).test(name)) {
+            throw new ValidationError(
+                'name must be 2-64 characters, start with a letter or digit and end with a letter, digit or underscore',
+            )
+        }
         const requestedGroup = requiredString(input.values.resourceGroup, 'resourceGroup')
         const addressPrefix = requiredCidr(input.values.addressPrefix, 'addressPrefix')
         const location = optionalOneOf(input.values.location, AZURE_VNET_LOCATIONS, 'location') ?? 'eastus'
@@ -153,9 +163,27 @@ export class AzureNetworkingAdapter implements CloudServiceAdapter {
         return match.name
     }
 
+    /**
+     * Mirrors the `azureJson`/`cosmosJson` helpers the other Azure adapters use:
+     * ARM endpoints can be Accept-sensitive, and a 204 carries no body to parse.
+     *
+     * Five copies of this now exist across adapter-azure/. Worth lifting onto
+     * AzureRuntimeClient once the open Azure PRs have merged — doing it in three
+     * parallel branches would just conflict.
+     */
     private async json<T>(path: string, init: RequestInit = {}, options = {}): Promise<T | null> {
-        const res = await this.client.fetch(path, init, options)
-        if (!res) return null
+        const res = await this.client.fetch(
+            path,
+            {
+                ...init,
+                headers: {
+                    accept: 'application/json',
+                    ...(init.headers ?? {}),
+                },
+            },
+            options,
+        )
+        if (!res || res.status === 204) return null
 
         const text = await res.text()
         if (!text) return null

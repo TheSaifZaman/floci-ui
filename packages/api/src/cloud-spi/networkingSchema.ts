@@ -13,8 +13,25 @@ const networkingFilters: FieldSchema[] = [
 
 export const AZURE_VNET_LOCATIONS = ['eastus', 'eastus2', 'westus', 'westus2', 'westeurope', 'northeurope'] as const
 
-/** IPv4 CIDR, e.g. 10.0.0.0/16. */
-export const CIDR_PATTERN = '^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$'
+/**
+ * IPv4 CIDR with real bounds, e.g. 10.0.0.0/16.
+ *
+ * Octets are limited to 0-255 and the prefix length to 0-32. A looser
+ * digits-and-slashes pattern accepts `999.999.999.999/99`, which then fails at ARM
+ * with an opaque runtime error instead of a clear ValidationError.
+ */
+const OCTET = '(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)'
+export const CIDR_PATTERN = `^(${OCTET}\\.){3}${OCTET}/(3[0-2]|[12]?\\d)$`
+
+/**
+ * Azure virtual network names: 2-64 characters, starting with a letter or digit
+ * and ending with a letter, digit or underscore.
+ *
+ * The provider's rule, not the runtime's — floci-az accepts names real Azure
+ * rejects, so a one-character name or a trailing hyphen would only fail on the
+ * ARM PUT.
+ */
+export const AZURE_VNET_NAME_PATTERN = '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}[a-zA-Z0-9_]$'
 
 /**
  * Azure offers real create and delete, unlike AWS in this category.
@@ -37,10 +54,11 @@ export function azureNetworkingSchema(): ServiceSchema {
                 required: true,
                 group: 'Required',
                 validation: {
-                    pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$',
-                    minLength: 1,
+                    pattern: AZURE_VNET_NAME_PATTERN,
+                    minLength: 2,
                     maxLength: 64,
-                    message: 'Start with a letter or digit; letters, digits, hyphens, underscores and periods only.',
+                    message:
+                        '2-64 characters, starting with a letter or digit and ending with a letter, digit or underscore.',
                 },
             },
             {
