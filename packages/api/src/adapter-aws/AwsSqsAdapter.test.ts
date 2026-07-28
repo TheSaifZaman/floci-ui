@@ -174,6 +174,23 @@ describe('AwsSqsAdapter', () => {
         await expect(adapter.create({values: {queueName: 'orders.fifo'}})).resolves.toBeDefined()
     })
 
+    test('sets FifoQueue when the name ends in .fifo', async () => {
+        // Real SQS rejects a .fifo create without this attribute. Floci core
+        // infers it from the suffix, so a stub or the emulator alone would not
+        // catch its absence.
+        const {client, sent} = stubSqs()
+        await new AwsSqsAdapter(client).create({values: {queueName: 'orders.fifo'}})
+
+        expect((sent[0] as CreateQueueCommand).input.Attributes).toEqual({FifoQueue: 'true'})
+    })
+
+    test('does not set FifoQueue for a standard queue', async () => {
+        const {client, sent} = stubSqs()
+        await new AwsSqsAdapter(client).create({values: {queueName: 'orders-queue'}})
+
+        expect((sent[0] as CreateQueueCommand).input.Attributes).toBeUndefined()
+    })
+
     test('deletes a queue by resolving its URL first', async () => {
         const {client, sent} = stubSqs()
         await new AwsSqsAdapter(client).delete('orders-queue')

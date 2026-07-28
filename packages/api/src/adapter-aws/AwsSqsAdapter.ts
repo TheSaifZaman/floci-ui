@@ -87,6 +87,10 @@ export class AwsSqsAdapter implements CloudServiceAdapter {
         const retention = stringValue(input.values.messageRetentionPeriod)
         if (visibilityTimeout) attributes.VisibilityTimeout = visibilityTimeout
         if (retention) attributes.MessageRetentionPeriod = retention
+        // A .fifo name alone is not enough: real SQS rejects the create unless
+        // FifoQueue is set. Floci core infers it from the suffix, so omitting it
+        // works locally and then fails against AWS.
+        if (isFifoName(name)) attributes.FifoQueue = 'true'
 
         const res = await this.sqs.send(
             new CreateQueueCommand({
@@ -180,6 +184,10 @@ function filterBySearch(resources: CloudResource[], search?: string): CloudResou
     const normalized = search?.trim().toLowerCase()
     if (!normalized) return resources
     return resources.filter((resource) => resource.name.toLowerCase().includes(normalized))
+}
+
+function isFifoName(value: string): boolean {
+    return value.endsWith('.fifo')
 }
 
 function isValidQueueName(value: string): boolean {
