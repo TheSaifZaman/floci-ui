@@ -1,7 +1,7 @@
 import type {FieldSchema, ServiceSchema, TableColumnSchema} from './types'
 
 const networkingColumns: TableColumnSchema[] = [
-    {name: 'name',    label: 'Name', copyable: true},
+    {name: 'name',    label: 'Name'},
     {name: 'version', label: 'CIDR', path: 'metadata.cidrBlock', format: 'code'},
     {name: 'status',  label: 'State', format: 'badge'},
     {name: 'type',    label: 'Type'},

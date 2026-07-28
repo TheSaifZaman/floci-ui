@@ -70,6 +70,15 @@ Services marked `No` render as a disabled sidebar row whose tooltip carries the
 server-supplied reason. Adding one is a catalog row in
 `packages/api/src/cloud-spi/serviceCatalog.ts` plus an adapter — no frontend change.
 
+<p align="center">
+  <img src="docs/images/floci-ui-console-azure.png" alt="Azure console home, showing services grouped by category with per-cloud naming and coming-soon reasons" width="900" />
+</p>
+
+Azure on the same build: the nav is grouped by category, `k8s Engine` is labelled
+`AKS` for this provider, and every unavailable service carries a reason — Serverless
+reads `coming soon` because the Floci-AZ runtime answers 501 for Azure Functions,
+even though an adapter is registered.
+
 ## Current Capability Snapshot
 
 <details>

@@ -413,8 +413,8 @@ function renderResourceSurface({
   if (statusLoading) {
     return (
       <RuntimeNotice
-        title="Checking runtime"
-        detail="Waiting for the proxy to confirm the selected cloud runtime."
+        title="Loading service"
+        detail="Waiting for the proxy to describe this service and confirm its runtime."
         state="pending"
       />
     );

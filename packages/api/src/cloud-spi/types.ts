@@ -129,8 +129,6 @@ export interface TableColumnSchema {
      */
     path?: string
     format?: ColumnFormat
-    sortable?: boolean
-    copyable?: boolean
     emptyText?: string
     width?: string
 }

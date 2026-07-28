@@ -33,16 +33,3 @@ export function renderColumnValue(value: unknown, column: TableColumnSchema): Re
     }
 }
 
-/** Sortable primitive for a cell value, honouring the column's format. */
-export function sortableValue(value: unknown, column: TableColumnSchema): string | number | null {
-    if (value === null || value === undefined || value === '') return null
-    if (typeof value === 'number') return value
-    if (typeof value === 'boolean') return value ? 1 : 0
-
-    if (column.format === 'datetime' || column.format === 'relative') {
-        const time = new Date(String(value)).getTime()
-        return Number.isNaN(time) ? String(value) : time
-    }
-
-    return String(value)
-}

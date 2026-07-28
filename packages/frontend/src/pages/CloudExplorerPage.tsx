@@ -34,6 +34,11 @@ export function CloudExplorerPage() {
         [service, servicesQuery.data],
     )
 
+    // Until the catalog resolves, availability is unknown — not "coming soon".
+    // Treating it as unknown keeps a registered service from flashing the
+    // adapter-coming-soon notice on every load.
+    const catalogPending = servicesQuery.isPending
+
     if (!routeCloud) {
         return <Navigate to="/cloud-explorer/aws/storage" replace/>
     }
@@ -76,7 +81,7 @@ export function CloudExplorerPage() {
                     serviceAvailability={selectedService?.availability}
                     serviceReason={selectedService?.reason}
                     cloudStatus={statusQuery.data}
-                    statusLoading={statusQuery.isLoading}
+                    statusLoading={statusQuery.isLoading || catalogPending}
                     onOpenInfo={() => setInfoOpen(true)}
                 />
             </div>

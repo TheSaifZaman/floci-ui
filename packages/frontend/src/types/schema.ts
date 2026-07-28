@@ -51,8 +51,6 @@ export interface TableColumnSchema {
     /** Dotted accessor, defaulting to `name`; needed to reach `metadata.*`. */
     path?: string
     format?: ColumnFormat
-    sortable?: boolean
-    copyable?: boolean
     emptyText?: string
     width?: string
 }
