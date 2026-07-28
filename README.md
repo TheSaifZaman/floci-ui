@@ -53,11 +53,12 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Group | Service | AWS | Azure | GCP |
 |---|---|---|---|---|
 | Compute | Compute | Yes (list, inspect, create, delete) | No | No |
-| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | Yes (list, create, inspect, delete) |
+| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | No |
 | Compute | Serverless | Yes (list, create, inspect, delete) | Runtime gap | Yes (list, create, inspect, delete) |
 | Storage | Storage | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) |
-| Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
+| Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | No |
 | Networking | Networking | Yes (list) | No | No |
+| Integration | SQS / Messaging / Pub/Sub | Yes (list, create, inspect, delete) | No | Yes (list, create, inspect, delete) |
 | Security | Secrets Manager / Key Vault | Yes (legacy page) | Yes (list, create, delete, inspect) | No |
 
 Console Home is available for all three clouds.
