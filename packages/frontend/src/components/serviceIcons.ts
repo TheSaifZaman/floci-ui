@@ -12,6 +12,7 @@ import {
     ShieldCheck,
     SlidersHorizontal,
     Table2,
+    Workflow,
     Zap,
     type LucideIcon,
 } from 'lucide-react'
@@ -40,6 +41,7 @@ const SERVICE_ICONS: Record<string, LucideIcon> = {
     iam: ShieldCheck,
     kms: Lock,
     parameters: SlidersHorizontal,
+    workflows: Workflow,
 }
 
 const FALLBACK_ICON: LucideIcon = Circle
