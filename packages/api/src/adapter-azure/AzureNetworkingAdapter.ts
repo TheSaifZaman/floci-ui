@@ -18,7 +18,9 @@ import type {
  * Talks to the Floci-AZ runtime's ARM surface for Microsoft.Network — verified
  * against `floci/floci-az` 0.9.0:
  *
- *   list   GET    /subscriptions/{s}/providers/Microsoft.Network/virtualNetworks
+ *   list   GET    /subscriptions/{s}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks
+ *                 (per group, aggregated — the subscription-scoped path answers
+ *                  200 with an empty value and never reports a real VNet)
  *   get    GET    /subscriptions/{s}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{n}
  *   create PUT    (same path as get) -> 200, provisioningState Succeeded
  *   delete DELETE (same path as get) -> 200, and the VNet is gone
@@ -65,12 +67,32 @@ export class AzureNetworkingAdapter implements CloudServiceAdapter {
         return azureNetworkingSchema()
     }
 
+    /**
+     * Enumerates resource groups and aggregates the per-group VNet lists.
+     *
+     * The subscription-scoped path exists in ARM and returns HTTP 200 here, but
+     * floci-az only implements the resource-group-scoped list: it routes the
+     * subscription path into its network service with a placeholder group, the
+     * strict match fails, and the response is a clean `{"value": []}`. So the
+     * call succeeds and the table stays empty even after a create that worked —
+     * a silent failure rather than an error. Verified 2026-07-29: a VNet created
+     * in `rg-probe` is absent from the subscription scope and present in the
+     * group scope.
+     */
     async list(query: ResourceQuery = {}): Promise<CloudResource[]> {
-        const subscription = await this.subscription()
-        const body = await this.json<ArmList<AzureVnet>>(
-            `/subscriptions/${subscription}/providers/Microsoft.Network/virtualNetworks?api-version=${API_VERSION}`,
+        const groups = await this.resourceGroupNames()
+        const perGroup = await Promise.all(
+            groups.map(async (group) => {
+                const body = await this.json<ArmList<AzureVnet>>(
+                    `${await this.vnetCollectionPath(group)}?api-version=${API_VERSION}`,
+                    {},
+                    // One unreadable group must not blank the whole table.
+                    {emptyOnNotFound: true},
+                )
+                return body?.value ?? []
+            }),
         )
-        return filterBySearch((body?.value ?? []).map(toResource), query.search)
+        return filterBySearch(perGroup.flat().map(toResource), query.search)
     }
 
     async get(id: string): Promise<CloudResource | null> {
@@ -139,6 +161,21 @@ export class AzureNetworkingAdapter implements CloudServiceAdapter {
         return `/subscriptions/${subscription}/resourceGroups/${encodeURIComponent(resourceGroup)}/providers/Microsoft.Network/virtualNetworks/${encodeURIComponent(name)}`
     }
 
+    /** Every resource group in the subscription, in the runtime's own casing. */
+    private async resourceGroupNames(): Promise<string[]> {
+        const subscription = await this.subscription()
+        const body = await this.json<ArmList<{name?: string}>>(
+            `/subscriptions/${subscription}/resourceGroups?api-version=${RESOURCE_API_VERSION}`,
+        )
+        return (body?.value ?? []).map((group) => group.name).filter((name): name is string => Boolean(name))
+    }
+
+    /** The group-scoped VNet collection path — the only list scope floci-az serves. */
+    private async vnetCollectionPath(resourceGroup: string): Promise<string> {
+        const subscription = await this.subscription()
+        return `/subscriptions/${subscription}/resourceGroups/${encodeURIComponent(resourceGroup)}/providers/Microsoft.Network/virtualNetworks`
+    }
+
     /**
      * Resolve the caller's resource group to the spelling the runtime uses.
      *
@@ -148,19 +185,15 @@ export class AzureNetworkingAdapter implements CloudServiceAdapter {
      * does not match the one `list()` reports.
      */
     private async resolveResourceGroup(resourceGroup: string): Promise<string> {
-        const subscription = await this.subscription()
-        const body = await this.json<ArmList<{name?: string}>>(
-            `/subscriptions/${subscription}/resourceGroups?api-version=${RESOURCE_API_VERSION}`,
+        const match = (await this.resourceGroupNames()).find(
+            (group) => group.toLowerCase() === resourceGroup.toLowerCase(),
         )
-        const match = (body?.value ?? []).find(
-            (group) => group.name?.toLowerCase() === resourceGroup.toLowerCase(),
-        )
-        if (!match?.name) {
+        if (!match) {
             throw new ValidationError(
                 `resource group ${resourceGroup} does not exist; create it before adding a VNet`,
             )
         }
-        return match.name
+        return match
     }
 
     /**

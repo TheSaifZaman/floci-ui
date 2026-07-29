@@ -42,12 +42,22 @@ function vnet(name: string, rg = 'rg-app', subnets = [{name: 'default', properti
     }
 }
 
-function runtimeStub(vnets: unknown[] = [vnet('core')], groups = [{name: 'rg-app'}]) {
+/**
+ * Mirrors floci-az rather than being permissive: only the **group-scoped**
+ * collection reports VNets, and the subscription-scoped path answers 200 with an
+ * empty value. A catch-all that served both made the adapter's original
+ * subscription-scoped list look correct while it returned nothing against the
+ * real runtime.
+ */
+function runtimeStub(vnets: Array<ReturnType<typeof vnet>> = [vnet('core')], groups = [{name: 'rg-app'}]) {
     return stubFetch((url) => {
         if (url.endsWith('/subscriptions')) return json({value: [{subscriptionId: SUB}]})
         if (url.includes('/virtualNetworks/')) return json(vnets[0] ?? {})
         if (url.includes('/resourceGroups?') || url.match(/\/resourceGroups$/)) return json({value: groups})
-        return json({value: vnets})
+
+        const group = url.match(/resourceGroups\/([^/?]+)\/providers\/Microsoft\.Network\/virtualNetworks/)?.[1]
+        if (!group) return json({value: []})
+        return json({value: vnets.filter((candidate) => candidate.id.includes(`/resourceGroups/${group}/`))})
     })
 }
 
@@ -107,6 +117,36 @@ describe('AzureNetworkingAdapter', () => {
 
         expect(resource?.metadata.subnetCount).toBe(0)
         expect(resource?.metadata.subnets).toEqual([])
+    })
+
+    /**
+     * Regression for the empty-table bug: the adapter listed at subscription
+     * scope, which floci-az answers 200-with-nothing, so a created VNet never
+     * appeared. Verified against the runtime on 2026-07-29.
+     */
+    test('lists per resource group rather than at subscription scope', async () => {
+        const calls = runtimeStub()
+
+        await adapter().list()
+
+        const collectionCalls = calls.filter(
+            (call) => call.url.includes('/virtualNetworks?') || call.url.endsWith('/virtualNetworks'),
+        )
+        expect(collectionCalls.length).toBeGreaterThan(0)
+        for (const call of collectionCalls) {
+            expect(call.url).toContain('/resourceGroups/rg-app/providers/Microsoft.Network/virtualNetworks')
+        }
+    })
+
+    test('aggregates VNets across every resource group', async () => {
+        runtimeStub(
+            [vnet('core', 'rg-app'), vnet('edge', 'rg-net')],
+            [{name: 'rg-app'}, {name: 'rg-net'}],
+        )
+
+        const resources = await adapter().list()
+
+        expect(resources.map((resource) => resource.id).sort()).toEqual(['rg-app/core', 'rg-net/edge'])
     })
 
     test('filters the list by search term', async () => {
