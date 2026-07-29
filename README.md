@@ -106,15 +106,17 @@ Current gaps:
 <details>
 <summary><strong>k8s Engine</strong></summary>
 
-AWS only, through the unified shell.
+All three clouds, through the unified shell.
 
-- EKS clusters can be listed and inspected.
-- Cluster metadata, node groups, and related details are surfaced when returned by Floci AWS Core.
+- AWS EKS and Azure AKS clusters can be listed and inspected.
+- GCP GKE clusters can additionally be created and deleted.
+- Cluster metadata, node groups, and related details are surfaced when returned by the runtime.
 
 Current gaps:
 
-- No AKS or GKE adapter yet.
-- No generic cluster creation flow in Cloud Explorer.
+- EKS and AKS are read-only. On AKS this is a runtime limit rather than a choice:
+  the shipped floci-az config runs AKS unmocked with no Docker socket to start k3s
+  with, so a created cluster never leaves `provisioningState: Failed`.
 
 </details>
 

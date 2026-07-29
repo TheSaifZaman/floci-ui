@@ -138,9 +138,13 @@ describe('AzureAksAdapter', () => {
         await expect(adapter().get('rg-app/nope')).resolves.toBeNull()
     })
 
-    test('refuses create and delete the way the AWS and GCP k8s adapters do', async () => {
-        // The category is read-only across every cloud: there is no generic cluster
-        // creation flow, and on this runtime a created cluster never provisions.
+    test('refuses create and delete because this runtime cannot provision a cluster', async () => {
+        // Deliberately a runtime-specific reason, not a category-wide one: GCP's
+        // GKE adapter does support create and delete, so "k8s is read-only
+        // everywhere" is false. What holds here is narrower and verified — the
+        // shipped floci-az config runs AKS unmocked with no Docker socket to
+        // start k3s with, so a created cluster sits at provisioningState Failed
+        // forever. Advertising create would be advertising a dead end.
         const a = adapter()
 
         await expect(a.create({values: {name: 'prod'}})).rejects.toThrow(NotSupportedError)

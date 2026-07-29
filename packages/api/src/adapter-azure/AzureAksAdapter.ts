@@ -17,12 +17,13 @@ import type {
  *   list GET /subscriptions/{s}/providers/Microsoft.ContainerService/managedClusters
  *   get  GET /subscriptions/{s}/resourceGroups/{rg}/providers/Microsoft.ContainerService/managedClusters/{n}
  *
- * Read-only, matching the AWS and GCP k8s adapters: the category has no generic
- * cluster creation flow. There is a second, runtime-specific reason here — a
- * cluster created against floci-az settles at `provisioningState: Failed` and
- * stays there, and `docker ps` shows nothing starts, unlike GKE on floci-gcp
- * which really launches k3s. Advertising create would advertise something that
- * cannot succeed.
+ * Read-only, and for a reason specific to this runtime rather than to the
+ * category: GCP's GKE adapter does support create and delete, so "k8s is
+ * read-only everywhere" is not true. What is true here is that a cluster created
+ * against floci-az settles at `provisioningState: Failed` and stays there, and
+ * `docker ps` shows nothing starts — unlike GKE on floci-gcp, which really
+ * launches k3s. Advertising create would advertise something that cannot
+ * succeed.
  *
  * `DELETE` does work on the runtime (202, and the cluster disappears), but a
  * delete-only surface in a category that cannot create is worse than none.
@@ -83,12 +84,12 @@ export class AzureAksAdapter implements CloudServiceAdapter {
         const subscription = await this.subscription()
         const path = `/subscriptions/${subscription}/resourceGroups/${encodeURIComponent(resourceGroup)}/providers/Microsoft.ContainerService/managedClusters/${encodeURIComponent(name)}`
 
-        const machine = await this.json<AksCluster>(
+        const cluster = await this.json<AksCluster>(
             `${path}?api-version=${API_VERSION}`,
             {},
             {emptyOnNotFound: true},
         )
-        return machine ? toResource(machine) : null
+        return cluster ? toResource(cluster) : null
     }
 
     async create(_input: CreateResourceInput): Promise<CloudResource> {
