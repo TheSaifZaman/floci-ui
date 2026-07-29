@@ -1,4 +1,4 @@
-import type {CloudProvider, FieldSchema, ServiceSchema, TableColumnSchema} from './types'
+import type {FieldSchema, ServiceSchema, TableColumnSchema} from './types'
 
 const loadBalancerColumns: TableColumnSchema[] = [
     {name: 'name', label: 'Name'},
@@ -83,8 +83,4 @@ export function awsLoadBalancingSchema(): ServiceSchema {
         filters: loadBalancerFilters,
         columns: loadBalancerColumns,
     }
-}
-
-export function loadBalancingSchemaFor(cloud: CloudProvider): ServiceSchema | null {
-    return cloud === 'aws' ? awsLoadBalancingSchema() : null
 }
