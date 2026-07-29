@@ -7,6 +7,16 @@ const eksColumns: TableColumnSchema[] = [
     {name: 'createdAt', label: 'Created At'},
 ]
 
+/** GKE reports an API endpoint and node pools, which the EKS list does not. */
+const gkeColumns: TableColumnSchema[] = [
+    {name: 'name', label: 'Name'},
+    {name: 'status', label: 'Status', format: 'badge'},
+    {name: 'version', label: 'Version'},
+    {name: 'region', label: 'Location'},
+    {name: 'endpoint', label: 'Endpoint', path: 'metadata.endpoint', format: 'code'},
+    {name: 'createdAt', label: 'Created At', format: 'datetime'},
+]
+
 const eksFilters: FieldSchema[] = [
     {name: 'search', label: 'Search', type: 'text', required: false},
 ]
@@ -40,10 +50,33 @@ export function gcpGkeSchema(): ServiceSchema {
         cloud: 'gcp',
         service: 'k8s',
         displayName: 'Google GKE',
-        fields: [],
-        actions: ['list', 'inspect'],
+        fields: [
+            {
+                name: 'clusterName',
+                label: 'Cluster Name',
+                type: 'text',
+                required: true,
+                description: 'Lowercase letters, numbers, and hyphens; must start with a letter.',
+            },
+            {
+                name: 'initialNodeCount',
+                label: 'Initial Node Count',
+                type: 'text',
+                required: false,
+                description: 'Defaults to 1. The local runtime backs the cluster with a single k3s container.',
+            },
+        ],
+        actions: ['list', 'create', 'inspect', 'delete'],
         filters: eksFilters,
-        columns: eksColumns,
+        columns: gkeColumns,
+        capabilities: {
+            resourceActions: [
+                {name: 'list', label: 'List clusters', enabled: true, status: 'available', runtimeRequired: true},
+                {name: 'create', label: 'Create cluster', enabled: true, status: 'available', runtimeRequired: true},
+                {name: 'delete', label: 'Delete cluster', enabled: true, status: 'available', runtimeRequired: true},
+                {name: 'inspect', label: 'Inspect cluster', enabled: true, status: 'available', runtimeRequired: false},
+            ],
+        },
     }
 }
 
