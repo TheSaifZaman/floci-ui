@@ -102,6 +102,9 @@ export class AwsLogsAdapter implements CloudServiceAdapter {
     }
 }
 
+/** AWS rejects a DescribeLogStreams Limit above this. GetLogEvents allows 10,000. */
+const MAX_DESCRIBE_LOG_STREAMS_LIMIT = 50
+
 interface LogStreamShape {
     logStreamName?: string
     arn?: string
@@ -125,7 +128,18 @@ class LogGroupDocumentStore implements DocumentStoreAdapter {
                 logGroupName: resourceId,
                 orderBy: 'LastEventTime',
                 descending: true,
-                limit: page.limit,
+                // Real AWS caps this at 50 and rejects anything higher with a
+                // ValidationException; the SPI defaults to 100 and permits 1000.
+                // The local runtime does not enforce the cap, so an unclamped
+                // value passes here and 400s in production.
+                //
+                // Clamping is safe where rejecting would be wrong: `limit` is a
+                // maximum, not a quota, and the response still carries
+                // `nextCursor`, so a short page is honest rather than a silent
+                // truncation. That is the opposite of `clampLimit`, which
+                // rejects — there the caller has no cursor to tell them more
+                // exists.
+                limit: Math.min(page.limit ?? MAX_DESCRIBE_LOG_STREAMS_LIMIT, MAX_DESCRIBE_LOG_STREAMS_LIMIT),
                 nextToken: page.cursor,
             }),
         )

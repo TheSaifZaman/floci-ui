@@ -156,6 +156,23 @@ describe('AwsLogsAdapter documents', () => {
         })
     })
 
+    /**
+     * Real AWS caps DescribeLogStreams Limit at 50 and rejects anything higher
+     * with a ValidationException. The SPI defaults to 100 and permits 1000, and
+     * the local runtime does not enforce the cap — so an unclamped value passes
+     * every local test and 400s in production. Encode the provider's rule.
+     */
+    test('clamps the stream page size to the AWS maximum of 50', async () => {
+        const {client, calls} = stubClient({DescribeLogStreamsCommand: () => ({logStreams: []})})
+        const adapter = new AwsLogsAdapter(client)
+
+        await adapter.documents.listCollections('/floci/probe')
+        await adapter.documents.listCollections('/floci/probe', {limit: 1000})
+        await adapter.documents.listCollections('/floci/probe', {limit: 25})
+
+        expect(calls.map((call) => call.input.limit)).toEqual([50, 50, 25])
+    })
+
     test('reads log events as items, oldest first', async () => {
         const {client, calls} = stubClient({
             GetLogEventsCommand: () => ({
