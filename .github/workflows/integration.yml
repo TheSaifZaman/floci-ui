@@ -102,9 +102,17 @@ jobs:
 
       - name: Assert the UI is served
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:4500/)
-          echo "UI HTTP $code"
-          test "$code" = "200"
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:4500/ || true)
+            echo "[$i] UI HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "UI reachable."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::UI did not become reachable in time"
+          exit 1
 
       - name: Dump container logs on failure
         if: failure()
