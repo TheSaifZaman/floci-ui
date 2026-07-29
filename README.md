@@ -58,7 +58,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Storage | Storage | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) |
 | Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | No |
 | Networking | Networking | Yes (list) | No | No |
-| Security | Secrets Manager | Yes (legacy page) | No | No |
+| Security | Secrets Manager / Key Vault | Yes (legacy page) | Yes (list, create, delete, inspect) | No |
 
 Console Home is available for all three clouds.
 

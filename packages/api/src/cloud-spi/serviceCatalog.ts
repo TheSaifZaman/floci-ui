@@ -45,6 +45,12 @@ export interface ServiceCatalogMetadata {
     /** Defaults to the catalog key. A leading '/' marks a page outside Cloud Explorer. */
     route?: string
     /**
+     * Per-cloud route override. Needed when one category is served by a legacy
+     * standalone page on one cloud and by Cloud Explorer on another — AWS secrets
+     * still live at /secretsmanager while Azure Key Vault is a normal explorer route.
+     */
+    routeByCloud?: Partial<Record<CloudProvider, string>>
+    /**
      * Escape hatch for a service whose UI predates the SPI, so availability
      * cannot come from the registry. Every entry here is migration debt — delete
      * the field once a real adapter exists.
@@ -67,10 +73,14 @@ export const SERVICE_CATALOG = {
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
     secrets: {
         displayName: 'Secrets Manager',
+        displayNameByCloud: {azure: 'Key Vault'},
         iconKey: 'secrets',
         group: 'Security',
         order: 10,
         route: '/secretsmanager',
+        // Azure Key Vault is a normal Cloud Explorer service, so it uses the catalog
+        // slug rather than the legacy standalone page AWS still points at.
+        routeByCloud: {azure: 'secrets'},
         // Migration debt: the AWS Secrets Manager page still lives outside Cloud
         // Explorer, so there is no adapter to derive availability from.
         legacyAvailability: {aws: 'available'},
@@ -108,8 +118,9 @@ export function displayNameFor(entry: ServiceCatalogEntry, cloud: CloudProvider)
     return entry.displayNameByCloud?.[cloud] ?? entry.displayName
 }
 
-export function routeFor(entry: ServiceCatalogEntry): string {
-    return entry.route ?? entry.service
+export function routeFor(entry: ServiceCatalogEntry, cloud?: CloudProvider): string {
+    const perCloud = cloud ? entry.routeByCloud?.[cloud] : undefined
+    return perCloud ?? entry.route ?? entry.service
 }
 
 export function compareCatalogEntries(a: ServiceCatalogEntry, b: ServiceCatalogEntry): number {

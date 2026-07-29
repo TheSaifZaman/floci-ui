@@ -1,6 +1,6 @@
 import type {CloudProvider, CloudServiceType} from './cloud'
 
-export type FieldType = 'text' | 'select'
+export type FieldType = 'text' | 'password' | 'select'
 export type ActionSchema = 'list' | 'create' | 'delete' | 'inspect'
 // Mirrors packages/api/src/cloud-spi/types.ts. Lifecycle verbs can be advertised
 // in a capability block even though they are not table-level controls.

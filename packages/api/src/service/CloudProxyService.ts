@@ -77,7 +77,7 @@ export class CloudProxyService {
                 displayName,
                 availability,
                 reason: override.reason ?? unavailableReason(availability, cloud, displayName),
-                route: routeFor(entry),
+                route: routeFor(entry, cloud),
                 iconKey: entry.iconKey,
                 group: entry.group,
                 order: entry.order,

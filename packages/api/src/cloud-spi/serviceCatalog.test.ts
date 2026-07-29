@@ -45,6 +45,14 @@ describe('SERVICE_CATALOG', () => {
         expect(routeFor(catalogEntry('secrets')!)).toBe('/secretsmanager')
     })
 
+    test('resolves per-cloud routes so one category can span a legacy page and the explorer', () => {
+        const secrets = catalogEntry('secrets')!
+        expect(routeFor(secrets, 'aws')).toBe('/secretsmanager')
+        expect(routeFor(secrets, 'azure')).toBe('secrets')
+        // A category with no per-cloud override is unaffected by the cloud argument.
+        expect(routeFor(catalogEntry('storage')!, 'azure')).toBe('storage')
+    })
+
     test('resolves per-cloud display names', () => {
         const k8s = catalogEntry('k8s')!
         expect(displayNameFor(k8s, 'aws')).toBe('EKS')

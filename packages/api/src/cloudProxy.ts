@@ -10,6 +10,7 @@ import {GcpStorageAdapter} from './adapter-gcp/GcpStorageAdapter'
 import {GcpCloudFunctionsAdapter} from './adapter-gcp/GcpCloudFunctionsAdapter'
 import {CloudProxyService} from './service/CloudProxyService'
 import {AzureServerlessAdapter} from './adapter-azure/AzureServerlessAdapter'
+import {AzureKeyVaultAdapter} from './adapter-azure/AzureKeyVaultAdapter'
 import {AwsServerlessAdapter} from './adapter-aws/AwsServerlessAdapter'
 import {awsClientsForAccount, resolveAccountId} from './aws'
 import {createEc2Service} from './services/ec2'
@@ -41,6 +42,7 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new GcpStorageAdapter(),
         new GcpCloudFunctionsAdapter(),
         new AzureServerlessAdapter(),
+        new AzureKeyVaultAdapter(),
     ])
 }
 

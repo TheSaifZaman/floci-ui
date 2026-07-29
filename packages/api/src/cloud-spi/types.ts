@@ -65,7 +65,7 @@ export interface CloudServiceStatus {
     errorCode: string | null
 }
 
-export type FieldType = 'text' | 'select'
+export type FieldType = 'text' | 'password' | 'select'
 
 export interface FieldSchema {
     name: string
@@ -152,7 +152,7 @@ export interface CloudResource {
     name: string
     cloud: CloudProvider
     service: CloudServiceType
-    type: 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database' | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
+    type: 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database' | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function' | 'secret'
     region: string | null
     createdAt: string | null
     status?: string | null
