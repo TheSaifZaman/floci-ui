@@ -19,6 +19,16 @@ const iamColumns: TableColumnSchema[] = [
     {name: 'createdAt', label: 'Created', format: 'datetime'},
 ]
 
+/**
+ * `kind` is **API-only today**, and that is a stated choice rather than a gap.
+ *
+ * `DynamicResourceView` sends only `search`, and nothing in the frontend renders
+ * `schema.filters` as controls, so this facet is reachable by calling the API
+ * directly and not from the console. Rendering non-search filters is a shared
+ * piece of frontend work — every category with a facet needs it — so it belongs
+ * in its own PR rather than half-built here, and it is deliberately not blocking
+ * the adapter.
+ */
 const iamFilters: FieldSchema[] = [
     {name: 'search', label: 'Search', type: 'text', required: false},
     {
