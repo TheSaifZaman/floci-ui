@@ -162,6 +162,22 @@ describe('AwsKmsAdapter', () => {
         await expect(new AwsKmsAdapter(client).get('missing')).resolves.toBeNull()
     })
 
+    /**
+     * Real KMS is one of the AWS services that does not use 404 for not-found:
+     * it answers `NotFoundException` with HTTP 400. The local runtime sends 404,
+     * so a status-only check passes locally and turns a missing key into a 502
+     * against real AWS.
+     */
+    test('returns null for the real KMS not-found shape, which carries HTTP 400', async () => {
+        const {client} = stubKms(() => {
+            throw Object.assign(new Error('Key ARN does not exist'), {
+                name: 'NotFoundException',
+                $metadata: {httpStatusCode: 400},
+            })
+        })
+        await expect(new AwsKmsAdapter(client).get('missing')).resolves.toBeNull()
+    })
+
     test('rethrows a non-404 failure from get', async () => {
         const {client} = stubKms(() => {
             throw Object.assign(new Error('AccessDenied'), {$metadata: {httpStatusCode: 403}})

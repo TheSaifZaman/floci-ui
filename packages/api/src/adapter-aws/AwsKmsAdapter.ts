@@ -133,7 +133,7 @@ export class AwsKmsAdapter implements CloudServiceAdapter {
             if (!res.KeyMetadata) return null
             return toResource(res.KeyMetadata, await this.getTags(id))
         } catch (error) {
-            if (hasHttpStatus(error, 404)) return null
+            if (isNotFound(error)) return null
             throw error
         }
     }
@@ -263,8 +263,17 @@ function oneOf<T extends readonly string[]>(
     return raw as T[number]
 }
 
-function hasHttpStatus(error: unknown, status: number): boolean {
+/**
+ * KMS is one of the AWS services that does not use 404 for not-found: real KMS
+ * answers `NotFoundException` with HTTP **400**. The local runtime happens to
+ * send 404, so a status-only check passes every test here and would start
+ * throwing 502s the moment the runtime tightened to the real contract — the same
+ * shape of bug as matching a wire code the SDK never produces. Match the name
+ * first and keep the status as a fallback for the emulator.
+ */
+function isNotFound(error: unknown): boolean {
     if (typeof error !== 'object' || error === null) return false
+    if ((error as {name?: string}).name === 'NotFoundException') return true
     const metadata = (error as {$metadata?: {httpStatusCode?: number}}).$metadata
-    return metadata?.httpStatusCode === status
+    return metadata?.httpStatusCode === 404
 }
