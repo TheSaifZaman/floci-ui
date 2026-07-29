@@ -291,7 +291,7 @@ describe('AwsParameterStoreAdapter', () => {
         expect(removed.input.TagKeys).toEqual(['stale'])
     })
 
-    test('skips the tag call it has nothing to send', async () => {
+    test('skips the tag call when it has nothing to send', async () => {
         const {client, sent} = stubSsm(() => ({}))
         await new AwsParameterStoreAdapter(client).updateTags('/floci/app/region', {env: 'prod'})
 
