@@ -5,9 +5,15 @@ import type {CapabilitySchema, FieldSchema, ResourceActionName, ServiceSchema, T
  *
  * No schema here exposes a secret value, and no adapter puts one in
  * `CloudResource.metadata`: that object reaches the inspector, the client-side
- * query cache and the request telemetry. Revealing a value is a deliberate,
- * separately advertised, uncached action — see the `revealValue` capability,
- * which stays `coming_soon` until the generic row-action mechanism exists.
+ * query cache and the request telemetry.
+ *
+ * Revealing a value therefore has to be a deliberate, uncached, separately
+ * advertised action rather than another metadata field. **No such capability is
+ * declared yet**, and deliberately so: declaring one means widening
+ * `ResourceActionName` and adding an SPI method with nothing behind it, which is
+ * the same "schema surface without a consumer" this repo avoids elsewhere. It
+ * lands with the generic row-action mechanism, which is what can actually serve
+ * it. Until then AWS keeps its dedicated page, which is where reveal lives today.
  */
 
 // The hyphen is escaped so the pattern also compiles under the `v` flag used for

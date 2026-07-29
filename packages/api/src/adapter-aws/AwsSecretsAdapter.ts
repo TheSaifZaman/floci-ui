@@ -77,7 +77,15 @@ export class AwsSecretsAdapter implements CloudServiceAdapter {
     }
 
     async delete(id: string): Promise<void> {
-        // Without this the secret enters a recovery window and keeps appearing.
+        // Immediate rather than the provider's 7-30 day recovery window, and a
+        // deliberate divergence from the legacy /secretsmanager page, which
+        // defaults to a 7 day window with force as an option.
+        //
+        // The explorer's delete is a generic verb with no place to ask "recover
+        // for how long?", and a soft-deleted secret keeps appearing in the table,
+        // which reads as a delete that silently failed. When the two surfaces are
+        // unified under the row-action mechanism, the page's choice is the one to
+        // keep — a recovery window with force as an explicit option.
         await this.client.send(new DeleteSecretCommand({SecretId: id, ForceDeleteWithoutRecovery: true}))
     }
 }
