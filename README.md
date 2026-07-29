@@ -53,7 +53,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Group | Service | AWS | Azure | GCP |
 |---|---|---|---|---|
 | Compute | Compute | Yes (list, inspect, create, delete) | No | No |
-| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | Yes (list, create, inspect, delete) |
+| Compute | EKS / AKS / GKE | Yes (list, inspect) | Yes (list, inspect) | Yes (list, create, inspect, delete) |
 | Compute | Serverless | Yes (list, create, inspect, delete) | Runtime gap | Yes (list, create, inspect, delete) |
 | Storage | Storage | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) |
 | Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
