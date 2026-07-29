@@ -158,7 +158,7 @@ export interface CloudResource {
     cloud: CloudProvider
     service: CloudServiceType
     /**
-     * Provider resource kind, kebab-case (`bucket`, `db-instance`, `sqs-queue`).
+     * Provider resource kind, kebab-case (`bucket`, `db-instance`, `fifo-queue`).
      *
      * Deliberately open where `CloudServiceType` is closed: nothing dispatches
      * exhaustively on it — it is rendered as a table cell and used for a handful

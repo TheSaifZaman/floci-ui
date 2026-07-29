@@ -211,4 +211,34 @@ describe('AwsSqsAdapter', () => {
         expect(sent).toHaveLength(1)
         expect(sent[0]).toBeInstanceOf(ListQueuesCommand)
     })
+
+    /**
+     * Bounds are SQS's own. Without them a non-numeric value only fails at the
+     * CreateQueue call, so the form reports a runtime error instead of a field error.
+     */
+    test('rejects out-of-range and non-numeric queue attributes', async () => {
+        const {client} = stubSqs()
+        const adapter = new AwsSqsAdapter(client)
+
+        await expect(
+            adapter.create({values: {queueName: 'q', visibilityTimeout: 'soon'}}),
+        ).rejects.toThrow(ValidationError)
+        await expect(
+            adapter.create({values: {queueName: 'q', visibilityTimeout: '43201'}}),
+        ).rejects.toThrow(ValidationError)
+        await expect(
+            adapter.create({values: {queueName: 'q', messageRetentionPeriod: '59'}}),
+        ).rejects.toThrow(ValidationError)
+    })
+
+    test('accepts attributes inside the SQS range and omits blanks', async () => {
+        const {client, sent} = stubSqs()
+
+        await new AwsSqsAdapter(client).create({
+            values: {queueName: 'q', visibilityTimeout: '30', messageRetentionPeriod: ''},
+        })
+
+        const create = sent.find((command) => command instanceof CreateQueueCommand)
+        expect(create?.input.Attributes).toEqual({VisibilityTimeout: '30'})
+    })
 })

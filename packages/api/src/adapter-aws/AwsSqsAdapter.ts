@@ -83,8 +83,10 @@ export class AwsSqsAdapter implements CloudServiceAdapter {
         }
 
         const attributes: Record<string, string> = {}
-        const visibilityTimeout = stringValue(input.values.visibilityTimeout)
-        const retention = stringValue(input.values.messageRetentionPeriod)
+        // Bounds are SQS's own, so a bad value fails in the form rather than as a
+        // 400 from the runtime several seconds later.
+        const visibilityTimeout = numericAttribute(input.values.visibilityTimeout, 'visibilityTimeout', 0, 43_200)
+        const retention = numericAttribute(input.values.messageRetentionPeriod, 'messageRetentionPeriod', 60, 1_209_600)
         if (visibilityTimeout) attributes.VisibilityTimeout = visibilityTimeout
         if (retention) attributes.MessageRetentionPeriod = retention
         // A .fifo name alone is not enough: real SQS rejects the create unless
@@ -178,6 +180,25 @@ function queueNameFromUrl(url: string): string {
 
 function stringValue(value: unknown): string {
     return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Validate an optional numeric queue attribute against SQS's documented range.
+ *
+ * Returns '' when the caller left it blank — these are optional, and an empty
+ * field must not become an attribute.
+ */
+function numericAttribute(value: unknown, field: string, min: number, max: number): string {
+    const raw = stringValue(value)
+    if (!raw) return ''
+    if (!/^\d+$/.test(raw)) {
+        throw new ValidationError(`${field} must be a whole number of seconds between ${min} and ${max}.`)
+    }
+    const parsed = Number(raw)
+    if (parsed < min || parsed > max) {
+        throw new ValidationError(`${field} must be between ${min} and ${max} seconds.`)
+    }
+    return raw
 }
 
 function filterBySearch(resources: CloudResource[], search?: string): CloudResource[] {
