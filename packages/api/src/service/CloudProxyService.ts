@@ -10,7 +10,11 @@ import type {
     CosmosContainer,
     CosmosItem,
     CosmosQueryResult,
+    CreateKubernetesFargateProfileInput,
+    CreateKubernetesNodegroupInput,
     CreateResourceInput,
+    KubernetesFargateProfile,
+    KubernetesNodegroup,
     NoSqlItem,
     ResourceQuery,
     ServerlessInvokeResult,
@@ -290,6 +294,42 @@ async invokeResource(
         const adapter = this.requireAdapter(cloud, 'nosql')
         if (!adapter.listNoSqlItems) throw new NotSupportedError(`Item listing is not supported for ${cloud}/nosql`)
         return adapter.listNoSqlItems(resourceId)
+    }
+
+    async listKubernetesNodegroups(cloud: CloudProvider, clusterId: string): Promise<KubernetesNodegroup[]> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.listKubernetesNodegroups) throw new NotSupportedError(`Nodegroups are not supported for ${cloud}/k8s`)
+        return adapter.listKubernetesNodegroups(clusterId)
+    }
+
+    async createKubernetesNodegroup(cloud: CloudProvider, clusterId: string, input: CreateKubernetesNodegroupInput): Promise<KubernetesNodegroup> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.createKubernetesNodegroup) throw new NotSupportedError(`Nodegroup creation is not supported for ${cloud}/k8s`)
+        return adapter.createKubernetesNodegroup(clusterId, input)
+    }
+
+    async deleteKubernetesNodegroup(cloud: CloudProvider, clusterId: string, nodegroupId: string): Promise<void> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.deleteKubernetesNodegroup) throw new NotSupportedError(`Nodegroup deletion is not supported for ${cloud}/k8s`)
+        await adapter.deleteKubernetesNodegroup(clusterId, nodegroupId)
+    }
+
+    async listKubernetesFargateProfiles(cloud: CloudProvider, clusterId: string): Promise<KubernetesFargateProfile[]> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.listKubernetesFargateProfiles) throw new NotSupportedError(`Fargate profiles are not supported for ${cloud}/k8s`)
+        return adapter.listKubernetesFargateProfiles(clusterId)
+    }
+
+    async createKubernetesFargateProfile(cloud: CloudProvider, clusterId: string, input: CreateKubernetesFargateProfileInput): Promise<KubernetesFargateProfile> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.createKubernetesFargateProfile) throw new NotSupportedError(`Fargate profile creation is not supported for ${cloud}/k8s`)
+        return adapter.createKubernetesFargateProfile(clusterId, input)
+    }
+
+    async deleteKubernetesFargateProfile(cloud: CloudProvider, clusterId: string, profileId: string): Promise<void> {
+        const adapter = this.requireAdapter(cloud, 'k8s')
+        if (!adapter.deleteKubernetesFargateProfile) throw new NotSupportedError(`Fargate profile deletion is not supported for ${cloud}/k8s`)
+        await adapter.deleteKubernetesFargateProfile(clusterId, profileId)
     }
 
     async clearEmailInbox(cloud: CloudProvider): Promise<void> {
