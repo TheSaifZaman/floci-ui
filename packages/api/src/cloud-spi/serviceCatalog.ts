@@ -92,6 +92,13 @@ export const SERVICE_CATALOG = {
     },
     identity: {displayName: 'Identity', iconKey: 'iam', group: 'Security', order: 5},
     apigateway: {displayName: 'API Gateway', iconKey: 'apigateway', group: 'Integration', order: 10},
+    email: {
+        displayName: 'Email',
+        displayNameByCloud: {aws: 'SES Mailbox'},
+        iconKey: 'email',
+        group: 'Integration',
+        order: 20,
+    },
     secrets: {
         displayName: 'Secrets Manager',
         displayNameByCloud: {azure: 'Key Vault'},

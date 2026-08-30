@@ -151,7 +151,7 @@ export type KnownResourceType =
     | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database'
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
     | 'dynamodb-table' | 'secret' | 'iam-user' | 'servicebus-namespace'
-    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack'
+    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack' | 'email'
 
 export interface CloudResource {
     id: string
@@ -291,4 +291,6 @@ export interface CloudServiceAdapter {
     deleteCosmosItem?(databaseId: string, containerId: string, itemId: string, partitionKey?: string | null): Promise<void>
     queryCosmosItems?(databaseId: string, containerId: string, query: string): Promise<CosmosQueryResult>
     listNoSqlItems?(resourceId: string): Promise<NoSqlItem[]>
+    /** Clears the provider's locally captured email inbox, if it exposes one. */
+    clearEmailInbox?(): Promise<void>
 }

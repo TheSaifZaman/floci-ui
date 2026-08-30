@@ -4,7 +4,7 @@ export type KnownResourceType =
     | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database'
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
     | 'dynamodb-table' | 'secret' | 'iam-user' | 'servicebus-namespace'
-    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack';
+    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack' | 'email';
 
 export interface CloudResource {
     id: string
