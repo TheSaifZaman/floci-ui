@@ -83,6 +83,7 @@ export const SERVICE_CATALOG = {
         order: 20,
     },
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
+    messaging: {displayName: 'Messaging', iconKey: 'messaging', group: 'Integration', order: 20},
     identity: {displayName: 'Identity', iconKey: 'iam', group: 'Security', order: 5},
     apigateway: {displayName: 'API Gateway', iconKey: 'apigateway', group: 'Integration', order: 10},
     secrets: {
