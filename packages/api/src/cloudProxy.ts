@@ -13,6 +13,8 @@ import {GcpStorageAdapter} from './adapter-gcp/GcpStorageAdapter'
 import {GcpCloudFunctionsAdapter} from './adapter-gcp/GcpCloudFunctionsAdapter'
 import {GcpCloudSqlAdapter} from './adapter-gcp/GcpCloudSqlAdapter'
 import {GcpGkeAdapter} from './adapter-gcp/GcpGkeAdapter'
+import {GcpPubSubAdapter} from './adapter-gcp/GcpPubSubAdapter'
+import {AwsSqsAdapter} from './adapter-aws/AwsSqsAdapter'
 import {CloudProxyService} from './service/CloudProxyService'
 import {AzureServerlessAdapter} from './adapter-azure/AzureServerlessAdapter'
 import {AzureKeyVaultAdapter} from './adapter-azure/AzureKeyVaultAdapter'
@@ -57,6 +59,8 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new GcpCloudFunctionsAdapter(),
         new GcpCloudSqlAdapter(),
         new GcpGkeAdapter(),
+        new GcpPubSubAdapter(),
+        new AwsSqsAdapter(clients.sqs),
         new AzureServerlessAdapter(),
         new AzureKeyVaultAdapter(),
     ])
