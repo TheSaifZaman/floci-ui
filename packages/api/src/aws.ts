@@ -5,6 +5,10 @@ import { EC2Client } from "@aws-sdk/client-ec2";
 import { RDSClient } from "@aws-sdk/client-rds";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { SQSClient } from "@aws-sdk/client-sqs";
+import { IAMClient } from "@aws-sdk/client-iam";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { APIGatewayClient } from "@aws-sdk/client-api-gateway";
+import { CloudFormationClient } from "@aws-sdk/client-cloudformation";
 
 const endpoint = process.env.FLOCI_ENDPOINT;
 const region = process.env.AWS_REGION || "us-east-1";
@@ -41,6 +45,10 @@ export type AwsClients = {
   rds: RDSClient;
   secretsManager: SecretsManagerClient;
   sqs: SQSClient;
+  iam: IAMClient;
+  dynamodb: DynamoDBClient;
+  apiGateway: APIGatewayClient;
+  cloudformation: CloudFormationClient;
 };
 
 export type AwsClientName = keyof AwsClients;
@@ -61,6 +69,10 @@ function buildClients(accountId: string): AwsClients {
     rds: new RDSClient(base),
     secretsManager: new SecretsManagerClient(base),
     sqs: new SQSClient(base),
+    iam: new IAMClient(base),
+    dynamodb: new DynamoDBClient(base),
+    apiGateway: new APIGatewayClient(base),
+    cloudformation: new CloudFormationClient(base),
   };
 }
 
@@ -93,3 +105,7 @@ export const ec2 = awsClients.ec2;
 export const rds = awsClients.rds;
 export const secretsManager = awsClients.secretsManager;
 export const sqs = awsClients.sqs;
+export const iam = awsClients.iam;
+export const dynamodb = awsClients.dynamodb;
+export const apiGateway = awsClients.apiGateway;
+export const cloudformation = awsClients.cloudformation;

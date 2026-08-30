@@ -52,13 +52,17 @@ cd packages/api && bun run scripts/service-matrix.ts
 
 | Group | Service | AWS | Azure | GCP |
 |---|---|---|---|---|
-| Compute | Compute | Yes (list, inspect, create, delete) | No | No |
-| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | No |
+| Compute | Compute | Yes (list, inspect, create, delete) | Yes (list, inspect, create, delete) | No |
+| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | Yes (list, create, inspect, delete) |
 | Compute | Serverless | Yes (list, create, inspect, delete) | Runtime gap | Yes (list, create, inspect, delete) |
 | Storage | Storage | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) |
-| Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | No |
+| Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
+| Databases | DynamoDB / Cosmos DB NoSQL / NoSQL | Yes (list, create, delete, inspect) | No | No |
 | Networking | Networking | Yes (list) | No | No |
-| Integration | SQS / Messaging / Pub/Sub | Yes (list, create, inspect, delete) | No | Yes (list, create, inspect, delete) |
+| Integration | API Gateway | Yes (list, create, delete, inspect) | No | No |
+| Integration | SQS / Service Bus / Pub/Sub | Yes (list, create, inspect, delete) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
+| Provisioning | CloudFormation / Infrastructure as Code | Yes (list, create, delete, inspect) | No | No |
+| Security | Identity | Yes (list, create, delete, inspect) | No | No |
 | Security | Secrets Manager / Key Vault | Yes (legacy page) | Yes (list, create, delete, inspect) | No |
 
 Console Home is available for all three clouds.
@@ -178,6 +182,37 @@ Current gaps:
   handled by the Networking panel, because they need dependent selectors that a
   flat generic form cannot express.
 - Advanced multi-cloud networking normalization is still pending.
+
+</details>
+
+<details>
+<summary><strong>Identity</strong></summary>
+
+AWS only, through the generic identity service category.
+
+- List and inspect IAM users.
+- Create and delete IAM users.
+- IAM user paths are supported during creation.
+
+Current gaps:
+
+- Roles, groups, policies, access keys, and other advanced IAM workflows are not exposed yet.
+- No Azure or GCP identity adapter yet.
+
+</details>
+
+<details>
+<summary><strong>API Gateway</strong></summary>
+
+AWS only, through the generic apigateway service category.
+
+- List and inspect REST APIs.
+- Create and delete REST APIs.
+
+Current gaps:
+
+- Resources, methods, deployments, and stages are not yet exposed.
+- No Azure or GCP API Gateway adapter yet.
 
 </details>
 

@@ -7,11 +7,14 @@ import type {
   CloudServiceType,
   CloudStatus,
 } from "@/types/cloud";
-import type { CloudResource, CosmosContainer, CosmosItem, CosmosQueryResult, StorageObjectList } from "@/types/resource";
+import type { CloudResource, CosmosContainer, CosmosItem, CosmosQueryResult, NoSqlItem, StorageObjectList } from "@/types/resource";
 import type { ServiceSchema } from "@/types/schema";
 import { getAccountId } from "@/lib/accountStore";
 
 type CloudPathParams = Record<string, string>;
+
+/** Cold starts pull a container image; measured at ~60s on a first invoke. */
+const INVOKE_TIMEOUT_MS = 120_000;
 
 export async function listClouds(
   signal?: AbortSignal,
@@ -135,14 +138,6 @@ export interface ServerlessInvokeResult {
   executionDuration?: number;
 }
 
-export interface ServerlessInvokeResult {
-  statusCode: number;
-  payload: string;
-  functionError?: string;
-  logResult?: string;
-  executionDuration?: number;
-}
-
 export async function invokeCloudResource(
   cloud: CloudProvider,
   service: CloudServiceType,
@@ -152,7 +147,15 @@ export async function invokeCloudResource(
 ): Promise<ServerlessInvokeResult> {
   const res = await apiClient.call<ServerlessInvokeResult, { payload: string }>(
     apiEndpointKeys.clouds.resources.invoke,
-    requestOptions(cloud, service, { signal, body: { payload } }),
+    requestOptions(cloud, service, {
+      signal,
+      body: { payload },
+      // A cold invoke can exceed a minute while the runtime pulls and starts the
+      // function container, so the 10s default would abort a request that is
+      // working. The user-visible alternative is a timeout error for a function
+      // that in fact ran.
+      timeout: INVOKE_TIMEOUT_MS,
+    }),
     { cloud, service, id },
   );
   return res.data;
@@ -341,6 +344,19 @@ export async function queryCosmosItems(
   return res.data;
 }
 
+export async function listNoSqlItems(
+  cloud: CloudProvider,
+  resourceId: string,
+  signal?: AbortSignal,
+): Promise<NoSqlItem[]> {
+  const res = await apiClient.call<NoSqlItem[]>(
+    apiEndpointKeys.clouds.nosql.items.list,
+    requestOptions(cloud, "nosql", { signal }),
+    { cloud, id: resourceId },
+  );
+  return res.data;
+}
+
 function requestOptions<TBody = unknown>(
   cloud: CloudProvider,
   service: string,
@@ -350,6 +366,8 @@ function requestOptions<TBody = unknown>(
     body?: TBody;
     rawBody?: BodyInit;
     headers?: HeadersInit;
+    /** Overrides the client default; needed for calls that can legitimately run long. */
+    timeout?: number;
   } = {},
 ) {
   return {

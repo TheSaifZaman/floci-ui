@@ -150,7 +150,8 @@ export interface ServiceSchema {
 export type KnownResourceType =
     | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database'
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
-    | 'queue' | 'fifo-queue' | 'topic'
+    | 'dynamodb-table' | 'secret' | 'iam-user' | 'servicebus-namespace'
+    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack'
 
 export interface CloudResource {
     id: string
@@ -220,6 +221,12 @@ export interface CosmosQueryResult {
     count: number
 }
 
+export interface NoSqlItem {
+    id: string
+    key: Record<string, unknown>
+    document: Record<string, unknown>
+}
+
 export interface ResourceQuery {
     search?: string
 }
@@ -283,4 +290,5 @@ export interface CloudServiceAdapter {
     upsertCosmosItem?(databaseId: string, containerId: string, document: Record<string, unknown>): Promise<CosmosItem>
     deleteCosmosItem?(databaseId: string, containerId: string, itemId: string, partitionKey?: string | null): Promise<void>
     queryCosmosItems?(databaseId: string, containerId: string, query: string): Promise<CosmosQueryResult>
+    listNoSqlItems?(resourceId: string): Promise<NoSqlItem[]>
 }

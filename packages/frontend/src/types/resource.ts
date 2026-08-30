@@ -3,7 +3,8 @@ import type {CloudProvider, CloudServiceType} from './cloud'
 export type KnownResourceType =
     | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database'
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
-    | 'queue' | 'fifo-queue' | 'topic';
+    | 'dynamodb-table' | 'secret' | 'iam-user' | 'servicebus-namespace'
+    | 'queue' | 'fifo-queue' | 'topic' | 'rest-api' | 'stack';
 
 export interface CloudResource {
     id: string
@@ -57,4 +58,10 @@ export interface CosmosItem {
 export interface CosmosQueryResult {
     items: Array<Record<string, unknown> | string | number | boolean | null>
     count: number
+}
+
+export interface NoSqlItem {
+    id: string
+    key: Record<string, unknown>
+    document: Record<string, unknown>
 }

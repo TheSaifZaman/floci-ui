@@ -20,6 +20,7 @@ export type ServiceGroup =
     | 'Databases'
     | 'Networking'
     | 'Integration'
+    | 'Provisioning'
     | 'Security'
     | 'Observability'
 
@@ -29,6 +30,7 @@ export const SERVICE_GROUP_ORDER: ServiceGroup[] = [
     'Databases',
     'Networking',
     'Integration',
+    'Provisioning',
     'Security',
     'Observability',
 ]
@@ -70,6 +72,16 @@ export const SERVICE_CATALOG = {
     serverless: {displayName: 'Serverless', iconKey: 'serverless', group: 'Compute', order: 30},
     storage: {displayName: 'Storage', iconKey: 'storage', group: 'Storage', order: 10},
     database: {displayName: 'Database', iconKey: 'database', group: 'Databases', order: 10},
+    nosql: {
+        displayName: 'NoSQL',
+        // Both labels are declared even though each arrives with its own adapter,
+        // so this row reads the same whichever of the two lands first. A label for
+        // a cloud with no adapter is inert: availability comes from the registry.
+        displayNameByCloud: {aws: 'DynamoDB', azure: 'Cosmos DB NoSQL'},
+        iconKey: 'nosql',
+        group: 'Databases',
+        order: 20,
+    },
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
     messaging: {
         displayName: 'Messaging',
@@ -78,6 +90,8 @@ export const SERVICE_CATALOG = {
         group: 'Integration',
         order: 10,
     },
+    identity: {displayName: 'Identity', iconKey: 'iam', group: 'Security', order: 5},
+    apigateway: {displayName: 'API Gateway', iconKey: 'apigateway', group: 'Integration', order: 10},
     secrets: {
         displayName: 'Secrets Manager',
         displayNameByCloud: {azure: 'Key Vault'},
@@ -91,6 +105,13 @@ export const SERVICE_CATALOG = {
         // Migration debt: the AWS Secrets Manager page still lives outside Cloud
         // Explorer, so there is no adapter to derive availability from.
         legacyAvailability: {aws: 'available'},
+    },
+    iac: {
+        displayName: 'Infrastructure as Code',
+        displayNameByCloud: {aws: 'CloudFormation'},
+        iconKey: 'iac',
+        group: 'Provisioning',
+        order: 10,
     },
 } as const satisfies Record<string, ServiceCatalogMetadata>
 
