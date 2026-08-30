@@ -109,9 +109,6 @@ export const SERVICE_CATALOG = {
         // Azure Key Vault is a normal Cloud Explorer service, so it uses the catalog
         // slug rather than the legacy standalone page AWS still points at.
         routeByCloud: {azure: 'secrets'},
-        // Migration debt: the AWS Secrets Manager page still lives outside Cloud
-        // Explorer, so there is no adapter to derive availability from.
-        legacyAvailability: {aws: 'available'},
     },
     iac: {
         displayName: 'Infrastructure as Code',

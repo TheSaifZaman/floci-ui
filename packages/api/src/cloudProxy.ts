@@ -22,6 +22,7 @@ import {AwsServerlessAdapter} from './adapter-aws/AwsServerlessAdapter'
 import {AwsIamAdapter} from './adapter-aws/AwsIamAdapter'
 import {AwsApiGatewayAdapter} from './adapter-aws/AwsApiGatewayAdapter'
 import {AwsCloudFormationAdapter} from './adapter-aws/AwsCloudFormationAdapter'
+import {AwsSecretsAdapter} from './adapter-aws/AwsSecretsAdapter'
 import {AwsSesAdapter} from './adapter-aws/AwsSesAdapter'
 import {awsClientsForAccount, resolveAccountId} from './aws'
 import {createEc2Service} from './services/ec2'
@@ -52,6 +53,7 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new AwsIamAdapter(clients.iam),
         new AwsApiGatewayAdapter(clients.apiGateway),
         new AwsCloudFormationAdapter(clients.cloudformation),
+        new AwsSecretsAdapter(clients.secretsManager),
         new AwsSesAdapter(),
         new AzureStorageAdapter(),
         new AzureServiceBusAdapter(),
