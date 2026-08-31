@@ -90,6 +90,13 @@ export const SERVICE_CATALOG = {
         group: 'Integration',
         order: 10,
     },
+    events: {
+        displayName: 'Events',
+        displayNameByCloud: {aws: 'EventBridge'},
+        iconKey: 'events',
+        group: 'Integration',
+        order: 15,
+    },
     identity: {displayName: 'Identity', iconKey: 'iam', group: 'Security', order: 5},
     apigateway: {displayName: 'API Gateway', iconKey: 'apigateway', group: 'Integration', order: 10},
     email: {

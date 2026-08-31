@@ -60,6 +60,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Databases | DynamoDB / Cosmos DB NoSQL / NoSQL | Yes (list, create, delete, inspect) | No | No |
 | Networking | Networking | Yes (list) | No | No |
 | Integration | API Gateway | Yes (list, create, delete, inspect) | No | No |
+| Integration | EventBridge / Events | Yes (list, create, delete, inspect) | No | No |
 | Integration | SES Mailbox / Email | Yes (list, inspect) | No | No |
 | Integration | SQS / Service Bus / Pub/Sub | Yes (list, create, inspect, delete) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
 | Provisioning | CloudFormation / Infrastructure as Code | Yes (list, create, delete, inspect) | No | No |

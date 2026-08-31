@@ -8,6 +8,8 @@ export type KnownCloudServiceType =
     | 'compute'
     | 'networking'
     | 'serverless'
+    | 'messaging'
+    | 'events'
     | 'secrets'
     | 'iac'
     | 'email'
