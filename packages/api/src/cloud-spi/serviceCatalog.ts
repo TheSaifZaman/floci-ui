@@ -83,6 +83,13 @@ export const SERVICE_CATALOG = {
         order: 20,
     },
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
+    loadbalancing: {
+        displayName: 'Load Balancing',
+        displayNameByCloud: {aws: 'ELB'},
+        iconKey: 'loadbalancing',
+        group: 'Networking',
+        order: 20,
+    },
     messaging: {
         displayName: 'Messaging',
         displayNameByCloud: {aws: 'SQS', gcp: 'Pub/Sub'},

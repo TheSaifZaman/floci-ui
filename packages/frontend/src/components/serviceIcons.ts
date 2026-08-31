@@ -10,6 +10,7 @@ import {
     Network,
     Radio,
     ScrollText,
+    Scale,
     Server,
     ShieldCheck,
     SlidersHorizontal,
@@ -46,6 +47,7 @@ const SERVICE_ICONS: Record<string, LucideIcon> = {
     logs: ScrollText,
     iam: ShieldCheck,
     kms: Lock,
+    loadbalancing: Scale,
     parameters: SlidersHorizontal,
 }
 

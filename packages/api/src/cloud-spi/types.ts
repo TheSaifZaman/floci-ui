@@ -161,7 +161,7 @@ export type KnownResourceType =
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
     | 'secret' | 'iam-user' | 'servicebus-namespace' | 'queue' | 'fifo-queue'
     | 'topic' | 'event-bus' | 'rest-api' | 'stack' | 'email' | 'sql-server'
-    | 'postgres-flexible-server'
+    | 'postgres-flexible-server' | 'load-balancer'
 
 export interface CloudResource {
     id: string
