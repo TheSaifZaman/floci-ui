@@ -42,6 +42,7 @@ export interface FieldSchema {
     description?: string
     group?: string
     span?: boolean
+    defaultValue?: string
     validation?: {
         pattern?: string
         minLength?: number

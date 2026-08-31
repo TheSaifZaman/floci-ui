@@ -75,6 +75,7 @@ export interface FieldSchema {
     description?: string
     group?: string
     span?: boolean
+    defaultValue?: string
     validation?: {
         pattern?: string
         minLength?: number
@@ -159,7 +160,8 @@ export type KnownResourceType =
     | 'bucket' | 'container' | 'cluster' | 'db-instance' | 'cosmos-database' | 'dynamodb-table'
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
     | 'secret' | 'iam-user' | 'servicebus-namespace' | 'queue' | 'fifo-queue'
-    | 'topic' | 'event-bus' | 'rest-api' | 'stack' | 'email'
+    | 'topic' | 'event-bus' | 'rest-api' | 'stack' | 'email' | 'sql-server'
+    | 'postgres-flexible-server'
 
 export interface CloudResource {
     id: string
@@ -219,6 +221,48 @@ export interface CosmosItem {
 export interface CosmosQueryResult {
     items: Array<Record<string, unknown> | string | number | boolean | null>
     count: number
+}
+
+export interface SqlConnectionInput {
+    username: string
+    password: string
+    database?: string
+    engine?: 'azure-sql' | 'postgresql'
+}
+
+export interface SqlDatabase {
+    name: string
+    state: string
+    createdAt: string | null
+    isSystem: boolean
+}
+
+export interface SqlTable {
+    schema: string
+    name: string
+    type: 'table' | 'view'
+    rowCount: number | null
+}
+
+export interface SqlColumn {
+    name: string
+    type: string
+}
+
+export interface SqlResultSet {
+    columns: SqlColumn[]
+    rows: Array<Record<string, unknown>>
+    truncated: boolean
+}
+
+export interface SqlQueryResult {
+    // `resultSets` holds only the statements that returned columns, while `rowsAffected`
+    // has one entry per executed statement. On a multi-statement script the two arrays
+    // therefore have different lengths — treat `rowsAffected` as a total, never as an
+    // index-for-index companion to `resultSets`.
+    resultSets: SqlResultSet[]
+    rowsAffected: number[]
+    durationMs: number
 }
 
 export interface NoSqlItem {
@@ -341,6 +385,9 @@ export interface CloudServiceAdapter {
     upsertCosmosItem?(databaseId: string, containerId: string, document: Record<string, unknown>): Promise<CosmosItem>
     deleteCosmosItem?(databaseId: string, containerId: string, itemId: string, partitionKey?: string | null): Promise<void>
     queryCosmosItems?(databaseId: string, containerId: string, query: string): Promise<CosmosQueryResult>
+    listSqlDatabases?(serverId: string, connection: SqlConnectionInput): Promise<SqlDatabase[]>
+    listSqlTables?(serverId: string, connection: SqlConnectionInput): Promise<SqlTable[]>
+    querySql?(serverId: string, connection: SqlConnectionInput, query: string): Promise<SqlQueryResult>
     listNoSqlItems?(resourceId: string): Promise<NoSqlItem[]>
     listKubernetesNodegroups?(clusterId: string): Promise<KubernetesNodegroup[]>
     createKubernetesNodegroup?(clusterId: string, input: CreateKubernetesNodegroupInput): Promise<KubernetesNodegroup>

@@ -17,6 +17,11 @@ import type {
   KubernetesFargateProfile,
   KubernetesNodegroup,
   NoSqlItem,
+  SqlCredentials,
+  SqlDatabase,
+  SqlEngine,
+  SqlQueryResult,
+  SqlTable,
   StorageObjectList,
 } from "@/types/resource";
 import type { ServiceSchema } from "@/types/schema";
@@ -24,6 +29,8 @@ import { getAccountId } from "@/lib/accountStore";
 
 type CloudPathParams = Record<string, string>;
 
+const AZURE_DATABASE_CREATE_TIMEOUT_MS = 5 * 60_000;
+const SQL_DATA_TIMEOUT_MS = 45_000;
 /** Cold starts pull a container image; measured at ~60s on a first invoke. */
 const INVOKE_TIMEOUT_MS = 120_000;
 
@@ -121,9 +128,13 @@ export async function createCloudResource(
   values: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<CloudResource> {
+  const timeout =
+    cloud === "azure" && service === "database"
+      ? AZURE_DATABASE_CREATE_TIMEOUT_MS
+      : undefined;
   const res = await apiClient.call<CloudResource, Record<string, unknown>>(
     apiEndpointKeys.clouds.resources.create,
-    requestOptions(cloud, service, { signal, body: values }),
+    requestOptions(cloud, service, { signal, body: values, timeout }),
     { cloud, service },
   );
   return res.data;
@@ -268,8 +279,8 @@ export async function listCosmosContainers(
   signal?: AbortSignal,
 ): Promise<CosmosContainer[]> {
   const res = await apiClient.call<CosmosContainer[]>(
-    apiEndpointKeys.clouds.database.cosmos.containers.list,
-    requestOptions(cloud, "database", { signal }),
+    apiEndpointKeys.clouds.nosql.cosmos.containers.list,
+    requestOptions(cloud, "nosql", { signal }),
     databasePathParams(cloud, databaseId),
   );
   return res.data;
@@ -282,8 +293,8 @@ export async function createCosmosContainer(
   signal?: AbortSignal,
 ): Promise<CosmosContainer> {
   const res = await apiClient.call<CosmosContainer, Record<string, unknown>>(
-    apiEndpointKeys.clouds.database.cosmos.containers.create,
-    requestOptions(cloud, "database", { signal, body: values }),
+    apiEndpointKeys.clouds.nosql.cosmos.containers.create,
+    requestOptions(cloud, "nosql", { signal, body: values }),
     databasePathParams(cloud, databaseId),
   );
   return res.data;
@@ -296,8 +307,8 @@ export async function deleteCosmosContainer(
   signal?: AbortSignal,
 ): Promise<void> {
   await apiClient.call<void>(
-    apiEndpointKeys.clouds.database.cosmos.containers.delete,
-    requestOptions(cloud, "database", { signal }),
+    apiEndpointKeys.clouds.nosql.cosmos.containers.delete,
+    requestOptions(cloud, "nosql", { signal }),
     { ...databasePathParams(cloud, databaseId), containerId },
   );
 }
@@ -311,8 +322,8 @@ export async function listCosmosItems(
   signal?: AbortSignal,
 ): Promise<CosmosItem[]> {
   const res = await apiClient.call<CosmosItem[]>(
-    apiEndpointKeys.clouds.database.cosmos.items.list,
-    requestOptions(cloud, "database", { signal }),
+    apiEndpointKeys.clouds.nosql.cosmos.items.list,
+    requestOptions(cloud, "nosql", { signal }),
     { ...databasePathParams(cloud, databaseId), containerId },
   );
   return res.data;
@@ -326,8 +337,8 @@ export async function upsertCosmosItem(
   signal?: AbortSignal,
 ): Promise<CosmosItem> {
   const res = await apiClient.call<CosmosItem, Record<string, unknown>>(
-    apiEndpointKeys.clouds.database.cosmos.items.upsert,
-    requestOptions(cloud, "database", { signal, body: document }),
+    apiEndpointKeys.clouds.nosql.cosmos.items.upsert,
+    requestOptions(cloud, "nosql", { signal, body: document }),
     { ...databasePathParams(cloud, databaseId), containerId },
   );
   return res.data;
@@ -342,8 +353,8 @@ export async function deleteCosmosItem(
   signal?: AbortSignal,
 ): Promise<void> {
   await apiClient.call<void>(
-    apiEndpointKeys.clouds.database.cosmos.items.delete,
-    requestOptions(cloud, "database", {
+    apiEndpointKeys.clouds.nosql.cosmos.items.delete,
+    requestOptions(cloud, "nosql", {
       signal,
       params: partitionKey ? { partitionKey } : undefined,
     }),
@@ -359,9 +370,75 @@ export async function queryCosmosItems(
   signal?: AbortSignal,
 ): Promise<CosmosQueryResult> {
   const res = await apiClient.call<CosmosQueryResult, { query: string }>(
-    apiEndpointKeys.clouds.database.cosmos.items.query,
-    requestOptions(cloud, "database", { signal, body: { query } }),
+    apiEndpointKeys.clouds.nosql.cosmos.items.query,
+    requestOptions(cloud, "nosql", { signal, body: { query } }),
     { ...databasePathParams(cloud, databaseId), containerId },
+  );
+  return res.data;
+}
+
+export async function listSqlDatabases(
+  cloud: CloudProvider,
+  serverId: string,
+  engine: SqlEngine,
+  credentials: SqlCredentials,
+  signal?: AbortSignal,
+): Promise<SqlDatabase[]> {
+  const res = await apiClient.call<SqlDatabase[], SqlCredentials & { engine: SqlEngine }>(
+    apiEndpointKeys.clouds.database.sql.databases,
+    requestOptions(cloud, "database", {
+      signal,
+      body: { ...credentials, engine },
+      timeout: SQL_DATA_TIMEOUT_MS,
+    }),
+    { cloud, id: serverId },
+  );
+  return res.data;
+}
+
+export async function listSqlTables(
+  cloud: CloudProvider,
+  serverId: string,
+  engine: SqlEngine,
+  database: string,
+  credentials: SqlCredentials,
+  signal?: AbortSignal,
+): Promise<SqlTable[]> {
+  const res = await apiClient.call<
+    SqlTable[],
+    SqlCredentials & { database: string; engine: SqlEngine }
+  >(
+    apiEndpointKeys.clouds.database.sql.tables,
+    requestOptions(cloud, "database", {
+      signal,
+      body: { ...credentials, database, engine },
+      timeout: SQL_DATA_TIMEOUT_MS,
+    }),
+    { cloud, id: serverId },
+  );
+  return res.data;
+}
+
+export async function querySql(
+  cloud: CloudProvider,
+  serverId: string,
+  engine: SqlEngine,
+  database: string,
+  credentials: SqlCredentials,
+  query: string,
+  signal?: AbortSignal,
+): Promise<SqlQueryResult> {
+  const res = await apiClient.call<
+    SqlQueryResult,
+    SqlCredentials & { database: string; engine: SqlEngine; query: string }
+  >(
+    apiEndpointKeys.clouds.database.sql.query,
+    requestOptions(cloud, "database", {
+      signal,
+      body: { ...credentials, database, engine, query },
+      timeout: SQL_DATA_TIMEOUT_MS,
+    }),
+    { cloud, id: serverId },
   );
   return res.data;
 }

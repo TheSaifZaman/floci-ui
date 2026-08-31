@@ -31,6 +31,7 @@ import type {
 import type { CloudResource, StorageObject } from "@/types/resource";
 import type { ServiceSchema } from "@/types/schema";
 import { CosmosNoSqlPanel } from "@/components/CosmosNoSqlPanel";
+import { AzureSqlPanel } from "@/components/AzureSqlPanel";
 import { ServerlessInvokePanel } from "@/components/ServerlessInvokePanel";
 import { DynamoDbTableExplorer } from "@/components/DynamoDbTableExplorer";
 
@@ -375,8 +376,18 @@ export function DynamicResourceView({
           runtimeReachable={runtimeReachable}
         />
       )}
-      {service === "database" && cloud === "azure" && (
+      {service === "nosql" && cloud === "azure" && activeSelected?.type === "cosmos-database" && (
         <CosmosNoSqlPanel
+          cloud={cloud}
+          resource={activeSelected}
+          runtimeReachable={canUseRuntime}
+        />
+      )}
+      {service === "database" &&
+        cloud === "azure" &&
+        (activeSelected?.type === "sql-server" ||
+          activeSelected?.type === "postgres-flexible-server") && (
+        <AzureSqlPanel
           cloud={cloud}
           resource={activeSelected}
           runtimeReachable={canUseRuntime}
@@ -433,7 +444,9 @@ function resourceCreateLabel(schema: ServiceSchema): string {
   if (schema.cloud === "azure" && schema.service === "storage")
     return "Create container";
   if (schema.cloud === "azure" && schema.service === "database")
-    return "Create database";
+    return "Create database server";
+  if (schema.cloud === "azure" && schema.service === "nosql")
+    return "Create Cosmos database";
   if (schema.cloud === "aws" && schema.service === "identity")
     return "Create user";
   if (schema.cloud === "aws" && schema.service === "nosql")
