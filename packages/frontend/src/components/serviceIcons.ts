@@ -15,6 +15,7 @@ import {
     ShieldCheck,
     SlidersHorizontal,
     Table2,
+    Workflow,
     Waypoints,
     Zap,
     type LucideIcon,
@@ -49,6 +50,7 @@ const SERVICE_ICONS: Record<string, LucideIcon> = {
     kms: Lock,
     loadbalancing: Scale,
     parameters: SlidersHorizontal,
+    workflows: Workflow,
 }
 
 const FALLBACK_ICON: LucideIcon = Circle

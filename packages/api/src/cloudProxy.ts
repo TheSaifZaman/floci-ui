@@ -20,6 +20,7 @@ import {CloudProxyService} from './service/CloudProxyService'
 import {AzureServerlessAdapter} from './adapter-azure/AzureServerlessAdapter'
 import {AzureKeyVaultAdapter} from './adapter-azure/AzureKeyVaultAdapter'
 import {AwsServerlessAdapter} from './adapter-aws/AwsServerlessAdapter'
+import {AwsStepFunctionsAdapter} from './adapter-aws/AwsStepFunctionsAdapter'
 import {AwsLoadBalancingAdapter} from './adapter-aws/AwsLoadBalancingAdapter'
 import {AwsEventBridgeAdapter} from './adapter-aws/AwsEventBridgeAdapter'
 import {AwsIamAdapter} from './adapter-aws/AwsIamAdapter'
@@ -53,6 +54,7 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new AwsComputeAdapter(ec2Service),
         new AwsNetworkingAdapter(ec2Service),
         new AwsServerlessAdapter(clients.lambda),
+        new AwsStepFunctionsAdapter(clients.sfn),
         new AwsLoadBalancingAdapter(clients.elbv2),
         new AwsEventBridgeAdapter(clients.eventbridge),
         new AwsIamAdapter(clients.iam),

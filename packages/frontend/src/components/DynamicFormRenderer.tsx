@@ -89,6 +89,24 @@ function FieldInput({field, required, maxLength, value, invalid, messageId, onCh
         )
     }
 
+    if (field.type === 'textarea') {
+        return (
+            <textarea
+                className={`textarea code-textarea ${invalid ? 'invalid' : ''}`}
+                value={value}
+                required={required}
+                aria-invalid={invalid || undefined}
+                aria-describedby={invalid || field.description ? messageId : undefined}
+                minLength={field.validation?.minLength}
+                maxLength={maxLength}
+                rows={10}
+                spellCheck={false}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={field.label}
+            />
+        )
+    }
+
     return (
         <input
             type={field.type === 'password' ? 'password' : 'text'}

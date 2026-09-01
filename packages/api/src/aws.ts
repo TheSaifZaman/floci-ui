@@ -4,6 +4,7 @@ import { EKSClient } from "@aws-sdk/client-eks";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { RDSClient } from "@aws-sdk/client-rds";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { SFNClient } from "@aws-sdk/client-sfn";
 import { ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { SQSClient } from "@aws-sdk/client-sqs";
@@ -46,6 +47,7 @@ export type AwsClients = {
   ec2: EC2Client;
   rds: RDSClient;
   secretsManager: SecretsManagerClient;
+  sfn: SFNClient;
   elbv2: ElasticLoadBalancingV2Client;
   eventbridge: EventBridgeClient;
   sqs: SQSClient;
@@ -72,6 +74,7 @@ function buildClients(accountId: string): AwsClients {
     ec2: new EC2Client(base),
     rds: new RDSClient(base),
     secretsManager: new SecretsManagerClient(base),
+    sfn: new SFNClient(base),
     elbv2: new ElasticLoadBalancingV2Client(base),
     eventbridge: new EventBridgeClient(base),
     sqs: new SQSClient(base),
