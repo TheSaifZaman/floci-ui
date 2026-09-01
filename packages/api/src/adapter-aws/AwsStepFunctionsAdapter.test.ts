@@ -23,7 +23,12 @@ function stubSfn(handler: (command: object) => SendResult | Promise<SendResult>)
 }
 
 const ARN = 'arn:aws:states:us-east-1:000000000000:stateMachine:orders'
-const DEFINITION = '{"StartAt":"Done","States":{"Done":{"Type":"Succeed"}}}'
+const DEFINITION = `{
+  "StartAt": "Done",
+  "States": {
+    "Done": {"Type": "Succeed"}
+  }
+}`
 const ROLE = 'arn:aws:iam::000000000000:role/sfn'
 
 const summary = {
@@ -159,6 +164,7 @@ describe('AwsStepFunctionsAdapter', () => {
         expect(command).toBeInstanceOf(CreateStateMachineCommand)
         expect(command.input.name).toBe('orders')
         expect(command.input.definition).toBe(DEFINITION)
+        expect(command.input.definition).toContain('\n')
         expect(command.input.roleArn).toBe(ROLE)
         // create returns only an ARN, so the machine is described to build the
         // resource rather than synthesising one from the input.

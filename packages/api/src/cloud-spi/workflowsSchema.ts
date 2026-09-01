@@ -1,4 +1,4 @@
-import type {CloudProvider, FieldSchema, ServiceSchema, TableColumnSchema} from './types'
+import type {FieldSchema, ServiceSchema, TableColumnSchema} from './types'
 
 /**
  * No `status` column, deliberately.
@@ -55,7 +55,7 @@ export function awsWorkflowsSchema(): ServiceSchema {
             {
                 name: 'definition',
                 label: 'Definition (Amazon States Language)',
-                type: 'text',
+                type: 'textarea',
                 required: true,
                 span: true,
                 group: 'Required',
@@ -80,8 +80,4 @@ export function awsWorkflowsSchema(): ServiceSchema {
         filters: workflowFilters,
         columns: workflowColumns,
     }
-}
-
-export function workflowsSchemaFor(cloud: CloudProvider): ServiceSchema | null {
-    return cloud === 'aws' ? awsWorkflowsSchema() : null
 }
