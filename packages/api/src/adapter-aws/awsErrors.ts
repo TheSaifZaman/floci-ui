@@ -105,6 +105,8 @@ const NOT_FOUND_NAMES = new Set([
     'DBInstanceNotFoundFault',
     'ParameterNotFound',
     'QueueDoesNotExist',
+    'StateMachineDoesNotExist',
+    'ExecutionDoesNotExist',
     'LoadBalancerNotFound',
     'LoadBalancerNotFoundException',
     'TargetGroupNotFound',

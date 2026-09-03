@@ -59,6 +59,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Databases | Database | Yes (list, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
 | Databases | DynamoDB / Cosmos DB NoSQL / NoSQL | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | No |
 | Networking | Networking | Yes (list) | No | No |
+| Integration | Step Functions / Workflows | Yes (list, create, delete, inspect) | No | No |
 | Networking | ELB / Load Balancing | Yes (list, create, delete, inspect) | No | No |
 | Integration | API Gateway | Yes (list, create, delete, inspect) | No | No |
 | Integration | EventBridge / Events | Yes (list, create, delete, inspect) | No | No |

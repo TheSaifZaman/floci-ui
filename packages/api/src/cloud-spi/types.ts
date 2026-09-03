@@ -65,7 +65,7 @@ export interface CloudServiceStatus {
     errorCode: string | null
 }
 
-export type FieldType = 'text' | 'password' | 'select'
+export type FieldType = 'text' | 'textarea' | 'password' | 'select'
 
 export interface FieldSchema {
     name: string
@@ -161,7 +161,7 @@ export type KnownResourceType =
     | 'instance' | 'image' | 'vpc' | 'lambda' | 'azure-function' | 'gcp-function'
     | 'secret' | 'iam-user' | 'servicebus-namespace' | 'queue' | 'fifo-queue'
     | 'topic' | 'event-bus' | 'rest-api' | 'stack' | 'email' | 'sql-server'
-    | 'postgres-flexible-server' | 'load-balancer'
+    | 'postgres-flexible-server' | 'load-balancer' | 'state-machine'
 
 export interface CloudResource {
     id: string

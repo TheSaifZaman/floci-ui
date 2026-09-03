@@ -83,6 +83,13 @@ export const SERVICE_CATALOG = {
         order: 20,
     },
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
+    workflows: {
+        displayName: 'Workflows',
+        displayNameByCloud: {aws: 'Step Functions'},
+        iconKey: 'workflows',
+        group: 'Integration',
+        order: 30,
+    },
     loadbalancing: {
         displayName: 'Load Balancing',
         displayNameByCloud: {aws: 'ELB'},
