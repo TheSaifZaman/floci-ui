@@ -18,20 +18,27 @@ function stubSecrets(options: {pages?: Array<{SecretList: object[]; NextToken?: 
         async send(command: object) {
             sent.push(command)
             if (command instanceof ListSecretsCommand) {
-                const pages = options.pages ?? [{SecretList: [{Name: 'db-password', ARN: 'arn:aws:secretsmanager:::db-password', CreatedDate: CREATED}]}]
+                const pages = options.pages ?? [{
+                    SecretList: [{
+                        Name: 'db-password',
+                        ARN: 'arn:aws:secretsmanager:::db-password',
+                        CreatedDate: CREATED,
+                        DeletedDate: new Date('2026-08-01T10:00:00.000Z'),
+                        KmsKeyId: 'alias/floci',
+                        Tags: [{Key: 'environment', Value: 'test'}],
+                    }],
+                }]
                 return pages[page++] ?? {SecretList: []}
             }
             if (command instanceof DescribeSecretCommand) {
                 if (options.missing) {
-                    const err = new Error('Secrets Manager can\'t find the specified secret.')
+                    const err = new Error("Secrets Manager can't find the specified secret.")
                     err.name = 'ResourceNotFoundException'
                     throw err
                 }
                 return {Name: 'db-password', ARN: 'arn:aws:secretsmanager:::db-password', CreatedDate: CREATED, Description: 'primary db'}
             }
-            if (command instanceof CreateSecretCommand) {
-                return {Name: (command as CreateSecretCommand).input.Name, ARN: 'arn:new'}
-            }
+            if (command instanceof CreateSecretCommand) return {Name: command.input.Name, ARN: 'arn:new'}
             return {}
         },
     } as unknown as SecretsManagerClient
@@ -45,17 +52,19 @@ describe('AwsSecretsAdapter', () => {
         expect(adapter.service).toBe('secrets')
     })
 
-    test('lists secret metadata', async () => {
+    test('lists secret metadata and retains recovery state and KMS metadata', async () => {
         const [resource] = await new AwsSecretsAdapter(stubSecrets().client).list()
 
-        expect(resource).toMatchObject({id: 'db-password', name: 'db-password', type: 'secret', service: 'secrets'})
+        expect(resource).toMatchObject({id: 'db-password', name: 'db-password', type: 'secret', service: 'secrets', status: 'deleted'})
         expect(resource?.createdAt).toBe(CREATED.toISOString())
-        expect(resource?.metadata.arn).toBe('arn:aws:secretsmanager:::db-password')
+        expect(resource?.metadata).toMatchObject({
+            arn: 'arn:aws:secretsmanager:::db-password',
+            kmsKeyId: 'alias/floci',
+            tags: [{key: 'environment', value: 'test'}],
+        })
     })
 
     test('never exposes a secret value', async () => {
-        // A value on CloudResource would reach the inspector, the client query
-        // cache and request telemetry, so it must not be fetched at all.
         const {client, sent} = stubSecrets()
         const adapter = new AwsSecretsAdapter(client)
         const [listed] = await adapter.list()
@@ -69,8 +78,7 @@ describe('AwsSecretsAdapter', () => {
                 expect(key.toLowerCase()).not.toContain('value')
             }
         }
-        // GetSecretValue is never sent.
-        expect(sent.every((c) => c.constructor.name !== 'GetSecretValueCommand')).toBe(true)
+        expect(sent.every((command) => command.constructor.name !== 'GetSecretValueCommand')).toBe(true)
     })
 
     test('follows pagination', async () => {
@@ -108,14 +116,13 @@ describe('AwsSecretsAdapter', () => {
         expect(command.input.Description).toBe('third party')
     })
 
-    test('forwards an initial value on create but never echoes it back', async () => {
+    test('forwards an initial value verbatim but never echoes it back', async () => {
         const {client, sent} = stubSecrets()
-        const resource = await new AwsSecretsAdapter(client)
-            .create({values: {secretName: 'api-key', secretValue: 's3cr3t'}})
+        const value = '  s3cr3t  '
+        const resource = await new AwsSecretsAdapter(client).create({values: {secretName: 'api-key', secretValue: value}})
 
-        expect((sent[0] as CreateSecretCommand).input.SecretString).toBe('s3cr3t')
-        // The value went to the runtime and stops there.
-        expect(JSON.stringify(resource)).not.toContain('s3cr3t')
+        expect((sent[0] as CreateSecretCommand).input.SecretString).toBe(value)
+        expect(JSON.stringify(resource)).not.toContain(value)
     })
 
     test('omits SecretString when no value was supplied', async () => {

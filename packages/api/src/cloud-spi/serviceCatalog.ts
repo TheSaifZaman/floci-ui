@@ -20,6 +20,7 @@ export type ServiceGroup =
     | 'Databases'
     | 'Networking'
     | 'Integration'
+    | 'Provisioning'
     | 'Security'
     | 'Observability'
 
@@ -29,6 +30,7 @@ export const SERVICE_GROUP_ORDER: ServiceGroup[] = [
     'Databases',
     'Networking',
     'Integration',
+    'Provisioning',
     'Security',
     'Observability',
 ]
@@ -45,10 +47,9 @@ export interface ServiceCatalogMetadata {
     /** Defaults to the catalog key. A leading '/' marks a page outside Cloud Explorer. */
     route?: string
     /**
-     * Per-cloud route override. Needed while a service has a bespoke page on one
-     * cloud and the generic explorer on another — AWS secrets still live at
-     * /secretsmanager while Azure Key Vault and GCP Secret Manager are normal
-     * explorer routes. Delete the override once the bespoke page is migrated.
+     * Per-cloud route override. Needed when one category is served by a legacy
+     * standalone page on one cloud and by Cloud Explorer on another — AWS secrets
+     * still live at /secretsmanager while Azure Key Vault is a normal explorer route.
      */
     routeByCloud?: Partial<Record<CloudProvider, string>>
     /**
@@ -71,18 +72,62 @@ export const SERVICE_CATALOG = {
     serverless: {displayName: 'Serverless', iconKey: 'serverless', group: 'Compute', order: 30},
     storage: {displayName: 'Storage', iconKey: 'storage', group: 'Storage', order: 10},
     database: {displayName: 'Database', iconKey: 'database', group: 'Databases', order: 10},
+    nosql: {
+        displayName: 'NoSQL',
+        // Both labels are declared even though each arrives with its own adapter,
+        // so this row reads the same whichever of the two lands first. A label for
+        // a cloud with no adapter is inert: availability comes from the registry.
+        displayNameByCloud: {aws: 'DynamoDB', azure: 'Cosmos DB NoSQL'},
+        iconKey: 'nosql',
+        group: 'Databases',
+        order: 20,
+    },
     networking: {displayName: 'Networking', iconKey: 'networking', group: 'Networking', order: 10},
+    loadbalancing: {
+        displayName: 'Load Balancing',
+        displayNameByCloud: {aws: 'ELB'},
+        iconKey: 'loadbalancing',
+        group: 'Networking',
+        order: 20,
+    },
+    messaging: {
+        displayName: 'Messaging',
+        displayNameByCloud: {aws: 'SQS', gcp: 'Pub/Sub'},
+        iconKey: 'messaging',
+        group: 'Integration',
+        order: 10,
+    },
+    events: {
+        displayName: 'Events',
+        displayNameByCloud: {aws: 'EventBridge'},
+        iconKey: 'events',
+        group: 'Integration',
+        order: 15,
+    },
+    identity: {displayName: 'Identity', iconKey: 'iam', group: 'Security', order: 5},
+    apigateway: {displayName: 'API Gateway', iconKey: 'apigateway', group: 'Integration', order: 10},
+    email: {
+        displayName: 'Email',
+        displayNameByCloud: {aws: 'SES Mailbox'},
+        iconKey: 'email',
+        group: 'Integration',
+        order: 20,
+    },
     secrets: {
         displayName: 'Secrets Manager',
-        // Azure's product is "Key Vault"; GCP's is "Secret Manager", singular.
         displayNameByCloud: {azure: 'Key Vault', gcp: 'Secret Manager'},
         iconKey: 'secrets',
         group: 'Security',
         order: 10,
-        // AWS keeps its dedicated page until value-reveal exists as a row action;
-        // Azure and GCP go through the generic explorer today. No legacyAvailability
-        // any more — every cloud here now has a real adapter to derive it from.
+        // AWS retains its dedicated page while Azure and GCP use Cloud Explorer.
         routeByCloud: {aws: '/secretsmanager'},
+    },
+    iac: {
+        displayName: 'Infrastructure as Code',
+        displayNameByCloud: {aws: 'CloudFormation'},
+        iconKey: 'iac',
+        group: 'Provisioning',
+        order: 10,
     },
 } as const satisfies Record<string, ServiceCatalogMetadata>
 
