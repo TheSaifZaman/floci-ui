@@ -120,6 +120,13 @@ export const SERVICE_CATALOG = {
         group: 'Integration',
         order: 20,
     },
+    kms: {
+        displayName: 'Key Management',
+        displayNameByCloud: {aws: 'KMS'},
+        iconKey: 'kms',
+        group: 'Security',
+        order: 20,
+    },
     secrets: {
         displayName: 'Secrets Manager',
         displayNameByCloud: {azure: 'Key Vault', gcp: 'Secret Manager'},

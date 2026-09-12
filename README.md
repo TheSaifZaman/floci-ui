@@ -69,6 +69,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Provisioning | CloudFormation / Infrastructure as Code | Yes (list, create, delete, inspect) | No | No |
 | Security | Identity | Yes (list, create, delete, inspect) | No | No |
 | Security | Secrets Manager / Key Vault / Secret Manager | Yes (list, create, inspect, delete) | Yes (list, create, delete, inspect) | Yes (list, create, inspect, delete) |
+| Security | KMS / Key Management | Yes (list, create, delete, inspect) | No | No |
 
 Console Home is available for all three clouds.
 
