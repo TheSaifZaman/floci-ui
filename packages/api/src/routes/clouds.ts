@@ -1,6 +1,11 @@
 import {Hono} from 'hono'
 import type {Context} from 'hono'
-import type {CloudProvider, CloudServiceType} from '../cloud-spi/types'
+import type {
+    CloudProvider,
+    CloudServiceType,
+    CreateDatabaseSnapshotInput,
+    SqlConnectionInput,
+} from '../cloud-spi/types'
 import {clampLimit, type PageQuery} from '../cloud-spi/childCollections'
 import {toHttpError} from '../cloud-spi/errors'
 import {isServiceType} from '../cloud-spi/serviceCatalog'
@@ -56,6 +61,37 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         return c.json(schema)
     })
 
+    app.get('/:cloud/services/database/snapshots', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const snapshots = await svc(c).listDatabaseSnapshots(cloud, c.req.query('instanceIdentifier'))
+            return c.json(snapshots)
+        })
+    })
+
+    app.post('/:cloud/services/database/snapshots', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const input = await c.req.json<CreateDatabaseSnapshotInput>()
+            const snapshot = await svc(c).createDatabaseSnapshot(cloud, input)
+            return c.json(snapshot, 201)
+        })
+    })
+
+    app.get('/:cloud/services/database/orderable-classes', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const classes = await svc(c).listDatabaseOrderableInstanceClasses(cloud, c.req.query('engine'))
+            return c.json(classes)
+        })
+    })
+
     app.get('/:cloud/services/:service/resources', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         const serviceType = c.req.param('service') as CloudServiceType
@@ -67,7 +103,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.get('/:cloud/services/database/resources/:id/containers', async (c) => {
+    app.get('/:cloud/services/nosql/resources/:id/containers', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -77,7 +113,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.post('/:cloud/services/database/resources/:id/containers', async (c) => {
+    app.post('/:cloud/services/nosql/resources/:id/containers', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -88,7 +124,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.delete('/:cloud/services/database/resources/:id/containers/:containerId', async (c) => {
+    app.delete('/:cloud/services/nosql/resources/:id/containers/:containerId', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -98,7 +134,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.get('/:cloud/services/database/resources/:id/containers/:containerId/items', async (c) => {
+    app.get('/:cloud/services/nosql/resources/:id/containers/:containerId/items', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -108,7 +144,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.post('/:cloud/services/database/resources/:id/containers/:containerId/items', async (c) => {
+    app.post('/:cloud/services/nosql/resources/:id/containers/:containerId/items', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -119,7 +155,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.delete('/:cloud/services/database/resources/:id/containers/:containerId/items/:itemId', async (c) => {
+    app.delete('/:cloud/services/nosql/resources/:id/containers/:containerId/items/:itemId', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -129,7 +165,7 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    app.post('/:cloud/services/database/resources/:id/containers/:containerId/query', async (c) => {
+    app.post('/:cloud/services/nosql/resources/:id/containers/:containerId/query', async (c) => {
         const cloud = c.req.param('cloud') as CloudProvider
         if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
 
@@ -140,8 +176,135 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
         })
     })
 
-    // Child collections, parameterised by service. The Cosmos routes above keep
-    // their literal `database` segment and are registered first, so they win.
+    app.post('/:cloud/services/database/resources/:id/sql/databases', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const connection = await c.req.json<SqlConnectionInput>()
+            const databases = await svc(c).listSqlDatabases(cloud, c.req.param('id'), connection)
+            return c.json(databases)
+        })
+    })
+
+    app.post('/:cloud/services/database/resources/:id/sql/tables', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const connection = await c.req.json<SqlConnectionInput>()
+            const tables = await svc(c).listSqlTables(cloud, c.req.param('id'), connection)
+            return c.json(tables)
+        })
+    })
+
+    app.post('/:cloud/services/database/resources/:id/sql/query', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const body = await c.req.json<SqlConnectionInput & {query?: string}>()
+            const {query = '', ...connection} = body
+            const result = await svc(c).querySql(cloud, c.req.param('id'), connection, query)
+            return c.json(result)
+        })
+    })
+
+    app.get('/:cloud/services/nosql/resources/:id/items', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const items = await svc(c).listNoSqlItems(cloud, c.req.param('id'))
+            return c.json(items)
+        })
+    })
+
+    app.post('/:cloud/services/nosql/resources/:id/items', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const document = await c.req.json<Record<string, unknown>>()
+            const item = await svc(c).putNoSqlItem(cloud, c.req.param('id'), document)
+            return c.json(item, 201)
+        })
+    })
+
+    app.delete('/:cloud/services/email/inbox', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            await svc(c).clearEmailInbox(cloud)
+            return c.json({ok: true})
+        })
+    })
+
+    app.get('/:cloud/services/k8s/resources/:id/nodegroups', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const nodegroups = await svc(c).listKubernetesNodegroups(cloud, c.req.param('id'))
+            return c.json(nodegroups)
+        })
+    })
+
+    app.post('/:cloud/services/k8s/resources/:id/nodegroups', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const nodegroup = await svc(c).createKubernetesNodegroup(cloud, c.req.param('id'), await c.req.json())
+            return c.json(nodegroup, 201)
+        })
+    })
+
+    app.delete('/:cloud/services/k8s/resources/:id/nodegroups/:nodegroupId', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            await svc(c).deleteKubernetesNodegroup(cloud, c.req.param('id'), c.req.param('nodegroupId'))
+            return c.json({ok: true})
+        })
+    })
+
+    app.get('/:cloud/services/k8s/resources/:id/fargate-profiles', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const profiles = await svc(c).listKubernetesFargateProfiles(cloud, c.req.param('id'))
+            return c.json(profiles)
+        })
+    })
+
+    app.post('/:cloud/services/k8s/resources/:id/fargate-profiles', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            const profile = await svc(c).createKubernetesFargateProfile(cloud, c.req.param('id'), await c.req.json())
+            return c.json(profile, 201)
+        })
+    })
+
+    app.delete('/:cloud/services/k8s/resources/:id/fargate-profiles/:profileId', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        if (!isCloudProvider(cloud)) return c.json({error: 'Unknown cloud'}, 404)
+
+        return withRuntime(c, async () => {
+            await svc(c).deleteKubernetesFargateProfile(cloud, c.req.param('id'), c.req.param('profileId'))
+            return c.json({ok: true})
+        })
+    })
+
+    // Child collections, parameterised by service. All the literal-segment
+    // routes above (Cosmos containers, SQL, NoSQL items, email inbox, k8s
+    // nodegroups/fargate profiles) must stay registered before these, or the
+    // `:service` param below would swallow their requests first.
 
     app.get('/:cloud/services/:service/resources/:id/collections', async (c) => {
         const target = childTarget(c)
@@ -370,6 +533,18 @@ export function createCloudRoutes(injectedService?: CloudProxyService) {
             const values = await c.req.json<Record<string, unknown>>()
             const resource = await svc(c).createResource(cloud, serviceType, {values})
             return c.json(resource, 201)
+        })
+    })
+
+    app.patch('/:cloud/services/:service/resources/:id', async (c) => {
+        const cloud = c.req.param('cloud') as CloudProvider
+        const serviceType = c.req.param('service') as CloudServiceType
+        if (!isCloudProvider(cloud) || !isServiceType(serviceType)) return c.json({error: 'Unknown cloud or service'}, 404)
+
+        return withRuntime(c, async () => {
+            const values = await c.req.json<Record<string, unknown>>()
+            const resource = await svc(c).updateResource(cloud, serviceType, c.req.param('id'), {values})
+            return c.json(resource, 200)
         })
     })
 

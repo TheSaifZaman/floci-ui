@@ -50,7 +50,11 @@ export function awsLogsSchema(): ServiceSchema {
         ],
         columns: [
             {name: 'name', label: 'Log group'},
-            {name: 'storedBytes', label: 'Stored', path: 'metadata.storedBytes', format: 'bytes'},
+            // No 'Stored' column here, deliberately: the runtime's DescribeLogGroups
+            // always reports storedBytes as 0 at the group level (only the stream
+            // level is accurate), so a table cell showing "0 B" would tell the user
+            // a populated group is empty. The field still travels in
+            // metadata.storedBytes for anyone reading the resource directly.
             {name: 'retentionInDays', label: 'Retention', path: 'metadata.retentionInDays', emptyText: 'Never expires'},
             {name: 'createdAt', label: 'Created', format: 'datetime'},
         ],
