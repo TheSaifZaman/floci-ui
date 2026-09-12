@@ -14,6 +14,7 @@ import {GcpStorageAdapter} from './adapter-gcp/GcpStorageAdapter'
 import {GcpCloudFunctionsAdapter} from './adapter-gcp/GcpCloudFunctionsAdapter'
 import {GcpCloudSqlAdapter} from './adapter-gcp/GcpCloudSqlAdapter'
 import {GcpGkeAdapter} from './adapter-gcp/GcpGkeAdapter'
+import {GcpCloudRunAdapter} from './adapter-gcp/GcpCloudRunAdapter'
 import {GcpPubSubAdapter} from './adapter-gcp/GcpPubSubAdapter'
 import {GcpSecretManagerAdapter} from './adapter-gcp/GcpSecretManagerAdapter'
 import {GcpSchedulerAdapter} from './adapter-gcp/GcpSchedulerAdapter'
@@ -77,6 +78,7 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new GcpCloudFunctionsAdapter(),
         new GcpCloudSqlAdapter(),
         new GcpGkeAdapter(),
+        new GcpCloudRunAdapter(),
         new GcpPubSubAdapter(),
         new GcpSecretManagerAdapter(),
         new GcpSchedulerAdapter(),
