@@ -1,9 +1,24 @@
 import {describe, expect, test} from 'bun:test'
 import {Hono} from 'hono'
 import {NotImplementedByRuntimeError, RuntimeUnavailableError, ValidationError} from '../cloud-spi/errors'
-import {azureDatabaseSchema} from '../cloud-spi/databaseSchema'
+import {awsDatabaseSchema, azureDatabaseSchema} from '../cloud-spi/databaseSchema'
+import {azureNoSqlSchema} from '../cloud-spi/noSqlSchema'
+import {awsDynamoDbSchema} from '../cloud-spi/dynamodbSchema'
+import {awsEksSchema} from '../cloud-spi/eksSchema'
 import {awsStorageSchema, azureStorageSchema, gcpStorageSchema} from '../cloud-spi/storageSchema'
-import type {CloudProvider, CloudResource, CloudServiceAdapter, CosmosContainer, CosmosItem, CosmosQueryResult, CreateResourceInput} from '../cloud-spi/types'
+import {awsSesEmailSchema} from '../cloud-spi/emailSchema'
+import type {
+    CloudProvider,
+    CloudResource,
+    CloudServiceAdapter,
+    CosmosContainer,
+    CosmosItem,
+    CosmosQueryResult,
+    CreateDatabaseSnapshotInput,
+    CreateResourceInput,
+    DatabaseSnapshot,
+    NoSqlItem,
+} from '../cloud-spi/types'
 import {CloudAdapterRegistry} from '../registry/CloudAdapterRegistry'
 import {CloudProxyService} from '../service/CloudProxyService'
 import type {RuntimeProbe} from '../service/runtimeProbe'
@@ -68,6 +83,151 @@ function appWithRoutes(
     return app
 }
 
+const databaseSnapshot: DatabaseSnapshot = {
+    id: 'orders-db-snapshot-1',
+    name: 'orders-db-snapshot-1',
+    instanceIdentifier: 'orders-db',
+    status: 'available',
+    engine: 'postgres',
+    version: '16.4',
+    createdAt: '2026-08-14T09:30:00.000Z',
+    metadata: {snapshotType: 'manual'},
+}
+
+describe('database snapshot routes', () => {
+    test('lists snapshots with the exact optional instance filter', async () => {
+        let delegatedIdentifier: string | undefined
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+            listDatabaseSnapshots: async (instanceIdentifier) => {
+                delegatedIdentifier = instanceIdentifier
+                return [databaseSnapshot]
+            },
+        })])
+
+        const res = await app.request(
+            '/api/clouds/aws/services/database/snapshots?instanceIdentifier=orders-db',
+        )
+
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([databaseSnapshot])
+        expect(delegatedIdentifier).toBe('orders-db')
+    })
+
+    test('creates a snapshot with the raw two-field input', async () => {
+        let delegatedInput: CreateDatabaseSnapshotInput | undefined
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+            createDatabaseSnapshot: async (input) => {
+                delegatedInput = input
+                return databaseSnapshot
+            },
+        })])
+        const input = {
+            instanceIdentifier: 'orders-db',
+            snapshotIdentifier: 'orders-db-snapshot-1',
+        }
+
+        const res = await app.request('/api/clouds/aws/services/database/snapshots', {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify(input),
+        })
+
+        expect(res.status).toBe(201)
+        expect(await res.json()).toEqual(databaseSnapshot)
+        expect(delegatedInput).toEqual(input)
+    })
+
+    test('returns 501 when the database adapter lacks either snapshot method', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+        })])
+
+        const listRes = await app.request('/api/clouds/aws/services/database/snapshots')
+        const createRes = await app.request('/api/clouds/aws/services/database/snapshots', {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({
+                instanceIdentifier: 'orders-db',
+                snapshotIdentifier: 'orders-db-snapshot-1',
+            }),
+        })
+
+        expect(listRes.status).toBe(501)
+        expect((await listRes.json()).code).toBe('operation_not_supported')
+        expect(createRes.status).toBe(501)
+        expect((await createRes.json()).code).toBe('operation_not_supported')
+    })
+
+    test('maps adapter snapshot validation errors to 400', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+            createDatabaseSnapshot: async () => {
+                throw new ValidationError('snapshotIdentifier is required')
+            },
+        })])
+
+        const res = await app.request('/api/clouds/aws/services/database/snapshots', {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({instanceIdentifier: 'orders-db', snapshotIdentifier: ''}),
+        })
+        expect(res.status).toBe(400)
+        const body = await res.json()
+
+        expect(body).toMatchObject({
+            code: 'invalid_request',
+            message: 'snapshotIdentifier is required',
+        })
+    })
+
+    test('maps AWS UnsupportedOperation snapshot errors through the shared mapper', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+            listDatabaseSnapshots: async () => {
+                throw Object.assign(new Error('RDS snapshots are unavailable'), {
+                    name: 'UnsupportedOperation',
+                    $fault: 'client',
+                    $metadata: {httpStatusCode: 500},
+                })
+            },
+        })])
+
+        const res = await app.request('/api/clouds/aws/services/database/snapshots')
+        expect(res.status).toBe(501)
+        const body = await res.json()
+
+        expect(body.code).toBe('operation_not_implemented')
+        expect(body.detail).toBe('RDS snapshots are unavailable')
+    })
+
+    test('lists orderable instance classes with engine filter', async () => {
+        let delegatedEngine: string | undefined
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'database',
+            schema: awsDatabaseSchema,
+            listDatabaseOrderableInstanceClasses: async (engine) => {
+                delegatedEngine = engine
+                return ['db.t3.micro', 'db.m8g.large']
+            },
+        })])
+
+        const res = await app.request(
+            '/api/clouds/aws/services/database/orderable-classes?engine=postgres',
+        )
+
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual(['db.t3.micro', 'db.m8g.large'])
+        expect(delegatedEngine).toBe('postgres')
+    })
+})
+
 describe('cloud schema routes', () => {
     test('returns AWS storage schema', async () => {
         const res = await appWithRoutes().request('/api/clouds/aws/services/storage/schema')
@@ -100,7 +260,35 @@ describe('cloud schema routes', () => {
         expect(res.status).toBe(200)
         expect(body.cloud).toBe('azure')
         expect(body.service).toBe('database')
-        expect(body.displayName).toBe('Cosmos DB')
+        // Cosmos moved to the nosql category; database now covers Azure SQL and PostgreSQL.
+        expect(body.displayName).toBe('Azure Databases')
+    })
+
+    test('returns Azure Cosmos NoSQL schema when the adapter is registered', async () => {
+        const app = appWithRoutes([mockAdapter('azure', {
+            service: 'nosql',
+            schema: azureNoSqlSchema,
+        })])
+        const res = await app.request('/api/clouds/azure/services/nosql/schema')
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body.service).toBe('nosql')
+        expect(body.displayName).toBe('Azure Cosmos DB NoSQL')
+    })
+
+    test('returns AWS DynamoDB schema for the nosql service', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'nosql',
+            schema: awsDynamoDbSchema,
+        })])
+        const res = await app.request('/api/clouds/aws/services/nosql/schema')
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body.cloud).toBe('aws')
+        expect(body.service).toBe('nosql')
+        expect(body.displayName).toBe('DynamoDB')
     })
 
     test('returns GCP storage schema when the adapter is registered', async () => {
@@ -186,10 +374,10 @@ describe('cloud schema routes', () => {
         expect(body.objects[0].name).toBe('object.txt')
     })
 
-    test('lists Cosmos containers through the cloud database adapter', async () => {
+    test('lists Cosmos containers through the cloud NoSQL adapter', async () => {
         const app = appWithRoutes([mockAdapter('azure', {
-            service: 'database',
-            schema: azureDatabaseSchema,
+            service: 'nosql',
+            schema: azureNoSqlSchema,
             listCosmosContainers: async (databaseId: string): Promise<CosmosContainer[]> => [{
                 id: 'items',
                 name: 'items',
@@ -200,7 +388,7 @@ describe('cloud schema routes', () => {
             }],
         })])
 
-        const res = await app.request('/api/clouds/azure/services/database/resources/appdb/containers')
+        const res = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers')
         const body = await res.json()
 
         expect(res.status).toBe(200)
@@ -208,16 +396,75 @@ describe('cloud schema routes', () => {
         expect(body[0].name).toBe('items')
     })
 
-    test('creates and deletes Cosmos databases through the cloud database adapter', async () => {
+    test('lists DynamoDB records through the nosql adapter', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'nosql',
+            schema: awsDynamoDbSchema,
+            listNoSqlItems: async (resourceId: string): Promise<NoSqlItem[]> => [{
+                id: '{"pk":"item-1"}',
+                key: {pk: 'item-1'},
+                document: {pk: 'item-1', name: 'First item', table: resourceId},
+            }],
+        })])
+
+        const res = await app.request('/api/clouds/aws/services/nosql/resources/orders/items')
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body[0].key).toEqual({pk: 'item-1'})
+        expect(body[0].document.table).toBe('orders')
+    })
+
+    test('puts a DynamoDB record through the nosql adapter', async () => {
+        const calls: Array<{resourceId: string; document: Record<string, unknown>}> = []
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'nosql',
+            schema: awsDynamoDbSchema,
+            putNoSqlItem: async (resourceId, document): Promise<NoSqlItem> => {
+                calls.push({resourceId, document})
+                return {id: JSON.stringify({pk: document.pk}), key: {pk: document.pk}, document}
+            },
+        })])
+
+        const res = await app.request('/api/clouds/aws/services/nosql/resources/orders/items', {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({pk: 'item-1', name: 'First item'}),
+        })
+        const body = await res.json()
+
+        expect(res.status).toBe(201)
+        expect(body.key).toEqual({pk: 'item-1'})
+        expect(calls).toEqual([{resourceId: 'orders', document: {pk: 'item-1', name: 'First item'}}])
+    })
+
+    test('clears the SES mailbox through the email adapter', async () => {
+        let cleared = false
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'email',
+            schema: awsSesEmailSchema,
+            clearEmailInbox: async () => {
+                cleared = true
+            },
+        })])
+
+        const res = await app.request('/api/clouds/aws/services/email/inbox', {method: 'DELETE'})
+
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ok: true})
+        expect(cleared).toBeTrue()
+    })
+
+    test('creates and deletes Cosmos databases through the cloud NoSQL adapter', async () => {
         const deleted: string[] = []
         const app = appWithRoutes([mockAdapter('azure', {
-            service: 'database',
-            schema: azureDatabaseSchema,
+            service: 'nosql',
+            schema: azureNoSqlSchema,
             create: async (input: CreateResourceInput): Promise<CloudResource> => ({
                 id: String(input.values.databaseName),
                 name: String(input.values.databaseName),
                 cloud: 'azure',
-                service: 'database',
+                service: 'nosql',
                 type: 'cosmos-database',
                 region: null,
                 createdAt: null,
@@ -228,12 +475,12 @@ describe('cloud schema routes', () => {
             },
         })])
 
-        const createRes = await app.request('/api/clouds/azure/services/database/resources', {
+        const createRes = await app.request('/api/clouds/azure/services/nosql/resources', {
             method: 'POST',
             body: JSON.stringify({databaseName: 'appdb'}),
         })
         const created = await createRes.json()
-        const deleteRes = await app.request('/api/clouds/azure/services/database/resources/appdb', {method: 'DELETE'})
+        const deleteRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb', {method: 'DELETE'})
 
         expect(createRes.status).toBe(201)
         expect(created.type).toBe('cosmos-database')
@@ -242,11 +489,11 @@ describe('cloud schema routes', () => {
         expect(deleted).toEqual(['appdb'])
     })
 
-    test('creates and deletes Cosmos containers through the cloud database adapter', async () => {
+    test('creates and deletes Cosmos containers through the cloud NoSQL adapter', async () => {
         const deleted: Array<{databaseId: string; containerId: string}> = []
         const app = appWithRoutes([mockAdapter('azure', {
-            service: 'database',
-            schema: azureDatabaseSchema,
+            service: 'nosql',
+            schema: azureNoSqlSchema,
             createCosmosContainer: async (databaseId: string, input: CreateResourceInput): Promise<CosmosContainer> => ({
                 id: String(input.values.containerName),
                 name: String(input.values.containerName),
@@ -260,12 +507,12 @@ describe('cloud schema routes', () => {
             },
         })])
 
-        const createRes = await app.request('/api/clouds/azure/services/database/resources/appdb/containers', {
+        const createRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers', {
             method: 'POST',
             body: JSON.stringify({containerName: 'items', partitionKeyPath: '/category'}),
         })
         const created = await createRes.json()
-        const deleteRes = await app.request('/api/clouds/azure/services/database/resources/appdb/containers/items', {method: 'DELETE'})
+        const deleteRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers/items', {method: 'DELETE'})
 
         expect(createRes.status).toBe(201)
         expect(created.databaseId).toBe('appdb')
@@ -274,11 +521,11 @@ describe('cloud schema routes', () => {
         expect(deleted).toEqual([{databaseId: 'appdb', containerId: 'items'}])
     })
 
-    test('upserts, deletes, and queries Cosmos items through the cloud database adapter', async () => {
+    test('upserts, deletes, and queries Cosmos items through the cloud NoSQL adapter', async () => {
         const deleted: Array<{databaseId: string; containerId: string; itemId: string; partitionKey?: string | null}> = []
         const app = appWithRoutes([mockAdapter('azure', {
-            service: 'database',
-            schema: azureDatabaseSchema,
+            service: 'nosql',
+            schema: azureNoSqlSchema,
             upsertCosmosItem: async (databaseId: string, containerId: string, document: Record<string, unknown>): Promise<CosmosItem> => ({
                 id: String(document.id),
                 databaseId,
@@ -297,17 +544,17 @@ describe('cloud schema routes', () => {
             }),
         })])
 
-        const upsertRes = await app.request('/api/clouds/azure/services/database/resources/appdb/containers/items/items', {
+        const upsertRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers/items/items', {
             method: 'POST',
             body: JSON.stringify({id: 'item-1', category: 'demo'}),
         })
         const upserted = await upsertRes.json()
-        const queryRes = await app.request('/api/clouds/azure/services/database/resources/appdb/containers/items/query', {
+        const queryRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers/items/query', {
             method: 'POST',
             body: JSON.stringify({query: 'SELECT * FROM c'}),
         })
         const queryBody = await queryRes.json()
-        const deleteRes = await app.request('/api/clouds/azure/services/database/resources/appdb/containers/items/items/item-1?partitionKey=demo', {method: 'DELETE'})
+        const deleteRes = await app.request('/api/clouds/azure/services/nosql/resources/appdb/containers/items/items/item-1?partitionKey=demo', {method: 'DELETE'})
 
         expect(upsertRes.status).toBe(201)
         expect(upserted.partitionKey).toBe('demo')
@@ -478,13 +725,23 @@ describe('service descriptors', () => {
         expect(serverless.reason).toContain('501')
     })
 
-    test('keeps the legacy Secrets Manager page available on AWS only', async () => {
-        const aws = await (await appWithRoutes().request('/api/clouds/aws/services')).json()
-        const gcp = await (await appWithRoutes().request('/api/clouds/gcp/services')).json()
+    test('routes AWS secrets to its bespoke page and GCP to the generic explorer', async () => {
+        // Availability now comes from adapter registration like every other service,
+        // but the absolute route is kept so the card still links to the standalone
+        // page instead of Cloud Explorer. Without an adapter it reads coming_soon.
+        const withAdapter = appWithRoutes([
+            mockAdapter('aws'),
+            mockAdapter('aws', {service: 'secrets'}),
+            mockAdapter('gcp', {service: 'secrets'}),
+        ])
+        const aws = await (await withAdapter.request('/api/clouds/aws/services')).json()
+        const bare = await (await appWithRoutes().request('/api/clouds/aws/services')).json()
+        const gcp = await (await withAdapter.request('/api/clouds/gcp/services')).json()
         const secretsFor = (body: Array<{service: string}>) => body.find((d) => d.service === 'secrets')
 
         expect(secretsFor(aws)).toMatchObject({availability: 'available', route: '/secretsmanager'})
-        expect(secretsFor(gcp)).toMatchObject({availability: 'coming_soon'})
+        expect(secretsFor(bare)).toMatchObject({availability: 'coming_soon'})
+        expect(secretsFor(gcp)).toMatchObject({availability: 'available', route: 'secrets'})
     })
 })
 
@@ -589,5 +846,130 @@ describe('per-service status', () => {
     test('rejects an unknown service slug', async () => {
         const res = await appWithRoutes().request('/api/clouds/aws/services/queue/status')
         expect(res.status).toBe(404)
+    })
+
+    test('routes nested EKS nodegroup and Fargate actions through the cloud adapter', async () => {
+        const calls: string[] = []
+        const app = appWithRoutes([mockAdapter('aws', {
+            service: 'k8s',
+            schema: awsEksSchema,
+            listKubernetesNodegroups: async (clusterId) => [{
+                id: 'workers', name: 'workers', clusterId, arn: null, status: 'ACTIVE', version: null,
+                releaseVersion: null, createdAt: null, modifiedAt: null, capacityType: null,
+                instanceTypes: ['t3.medium'], subnets: ['subnet-a'], nodeRole: null,
+                scalingConfig: null, labels: {}, tags: {},
+            }],
+            createKubernetesNodegroup: async (clusterId, input) => {
+                calls.push(`create-nodegroup:${clusterId}:${input.name}`)
+                return {
+                    id: input.name, name: input.name, clusterId, arn: null, status: null, version: null,
+                    releaseVersion: null, createdAt: null, modifiedAt: null, capacityType: null,
+                    instanceTypes: [], subnets: input.subnets, nodeRole: input.nodeRole,
+                    scalingConfig: null, labels: {}, tags: {},
+                }
+            },
+            deleteKubernetesNodegroup: async (clusterId, nodegroupId) => {
+                calls.push(`delete-nodegroup:${clusterId}:${nodegroupId}`)
+            },
+            listKubernetesFargateProfiles: async (clusterId) => [{
+                id: 'default', name: 'default', clusterId, arn: null, status: 'ACTIVE', createdAt: null,
+                podExecutionRoleArn: null, subnets: [], selectors: [], tags: {},
+            }],
+            createKubernetesFargateProfile: async (clusterId, input) => {
+                calls.push(`create-fargate:${clusterId}:${input.name}`)
+                return {
+                    id: input.name, name: input.name, clusterId, arn: null, status: null, createdAt: null,
+                    podExecutionRoleArn: input.podExecutionRoleArn, subnets: input.subnets ?? [], selectors: [], tags: {},
+                }
+            },
+            deleteKubernetesFargateProfile: async (clusterId, profileId) => {
+                calls.push(`delete-fargate:${clusterId}:${profileId}`)
+            },
+        })])
+
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/nodegroups')).status).toBe(200)
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/nodegroups', {
+            method: 'POST', headers: {'content-type': 'application/json'},
+            body: JSON.stringify({name: 'workers', nodeRole: 'role', subnets: ['subnet-a']}),
+        })).status).toBe(201)
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/nodegroups/workers', {method: 'DELETE'})).status).toBe(200)
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/fargate-profiles')).status).toBe(200)
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/fargate-profiles', {
+            method: 'POST', headers: {'content-type': 'application/json'},
+            body: JSON.stringify({name: 'default', podExecutionRoleArn: 'role', selectors: [{namespace: 'default'}]}),
+        })).status).toBe(201)
+        expect((await app.request('/api/clouds/aws/services/k8s/resources/demo/fargate-profiles/default', {method: 'DELETE'})).status).toBe(200)
+
+        expect(calls).toEqual([
+            'create-nodegroup:demo:workers',
+            'delete-nodegroup:demo:workers',
+            'create-fargate:demo:default',
+            'delete-fargate:demo:default',
+        ])
+    })
+
+    test('routes PATCH to the adapter update method', async () => {
+        let updatedId = ''
+        let updatedValues: Record<string, unknown> = {}
+        const app = appWithRoutes([
+            mockAdapter('aws', {
+                service: 'database',
+                schema: awsDatabaseSchema,
+                update: async (id, input) => {
+                    updatedId = id
+                    updatedValues = input.values
+                    return {
+                        id,
+                        name: id,
+                        cloud: 'aws',
+                        service: 'database',
+                        type: 'db-instance',
+                        region: 'us-east-1',
+                        createdAt: null,
+                        metadata: input.values,
+                    }
+                },
+            }),
+        ])
+
+        const res = await app.request('/api/clouds/aws/services/database/resources/orders-db', {
+            method: 'PATCH',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({autoMinorVersionUpgrade: 'true'}),
+        })
+
+        expect(res.status).toBe(200)
+        expect(updatedId).toBe('orders-db')
+        expect(updatedValues).toEqual({autoMinorVersionUpgrade: 'true'})
+    })
+
+    test('returns 501 when the adapter does not implement update', async () => {
+        const app = appWithRoutes([mockAdapter('aws', {service: 'database', schema: awsDatabaseSchema})])
+        const res = await app.request('/api/clouds/aws/services/database/resources/orders-db', {
+            method: 'PATCH',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({autoMinorVersionUpgrade: 'true'}),
+        })
+        expect(res.status).toBe(501)
+    })
+
+    test('maps adapter ValidationError on PATCH to 400', async () => {
+        const app = appWithRoutes([
+            mockAdapter('aws', {
+                service: 'database',
+                schema: awsDatabaseSchema,
+                update: async () => {
+                    throw new ValidationError('Invalid password')
+                },
+            }),
+        ])
+        const res = await app.request('/api/clouds/aws/services/database/resources/orders-db', {
+            method: 'PATCH',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({masterUserPassword: 'short'}),
+        })
+        expect(res.status).toBe(400)
+        const body = await res.json()
+        expect(body.message).toBe('Invalid password')
     })
 })
