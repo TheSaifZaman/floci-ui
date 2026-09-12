@@ -127,6 +127,12 @@ export const SERVICE_CATALOG = {
         group: 'Security',
         order: 20,
     },
+    parameters: {
+        displayName: 'Parameter Store',
+        iconKey: 'parameters',
+        group: 'Security',
+        order: 30,
+    },
     secrets: {
         displayName: 'Secrets Manager',
         displayNameByCloud: {azure: 'Key Vault', gcp: 'Secret Manager'},
