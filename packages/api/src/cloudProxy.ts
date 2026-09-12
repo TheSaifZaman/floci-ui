@@ -9,6 +9,7 @@ import {AwsDynamoDbAdapter} from './adapter-aws/AwsDynamoDbAdapter'
 import {AzureDatabaseAdapter} from './adapter-azure/AzureDatabaseAdapter'
 import {AzureServiceBusAdapter} from './adapter-azure/AzureServiceBusAdapter'
 import {AzureStorageAdapter} from './adapter-azure/AzureStorageAdapter'
+import {AzureAksAdapter} from './adapter-azure/AzureAksAdapter'
 import {AzureComputeAdapter} from './adapter-azure/AzureComputeAdapter'
 import {GcpStorageAdapter} from './adapter-gcp/GcpStorageAdapter'
 import {GcpCloudFunctionsAdapter} from './adapter-gcp/GcpCloudFunctionsAdapter'
@@ -72,6 +73,7 @@ export function createCloudAdapterRegistry(accountId?: string | null): CloudAdap
         new AzureStorageAdapter(),
         new AzureServiceBusAdapter(),
         new AzureDatabaseAdapter(),
+        new AzureAksAdapter(),
         new AzureNoSqlAdapter(),
         new AzureComputeAdapter(),
         new GcpStorageAdapter(),

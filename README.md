@@ -53,7 +53,7 @@ cd packages/api && bun run scripts/service-matrix.ts
 | Group | Service | AWS | Azure | GCP |
 |---|---|---|---|---|
 | Compute | Compute | Yes (list, inspect, create, delete) | Yes (list, inspect, create, delete) | No |
-| Compute | EKS / AKS / GKE | Yes (list, inspect) | No | Yes (list, create, inspect, delete) |
+| Compute | EKS / AKS / GKE | Yes (list, inspect) | Yes (list, inspect) | Yes (list, create, inspect, delete) |
 | Compute | Serverless | Yes (list, create, inspect, delete) | Runtime gap | Yes (list, create, inspect, delete) |
 | Compute | Containers / Cloud Run | No | No | Yes (list, create, delete, inspect) |
 | Storage | Storage | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) | Yes (list, create, delete, inspect) |
@@ -119,18 +119,21 @@ Current gaps:
 <details>
 <summary><strong>k8s Engine</strong></summary>
 
-AWS only, through the unified shell.
+All three clouds, through the unified shell.
 
-- EKS clusters can be listed and inspected.
-- A selected cluster lists its managed nodegroups and Fargate profiles.
+- AWS EKS and Azure AKS clusters can be listed and inspected.
+- A selected EKS cluster lists its managed nodegroups and Fargate profiles.
 - Create and delete managed nodegroups, including role, subnets, instance types, and scaling configuration.
 - Create and delete Fargate profiles, including pod execution role, selectors, labels, and optional subnets.
 - These nested EKS operations use the unified Cloud Proxy, not the legacy `/api/eks/*` routes.
+- GCP GKE clusters can additionally be created and deleted.
+- Cluster metadata, node groups, and related details are surfaced when returned by the runtime.
 
 Current gaps:
 
-- No AKS or GKE adapter yet.
-- No generic cluster creation flow in Cloud Explorer.
+- EKS and AKS are read-only. On AKS this is a runtime limit rather than a choice:
+  the shipped floci-az config runs AKS unmocked with no Docker socket to start k3s
+  with, so a created cluster never leaves `provisioningState: Failed`.
 
 </details>
 
