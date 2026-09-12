@@ -48,6 +48,7 @@ export const apiEndpointKeys = {
       },
       items: {
         list: "clouds.services.nosql.items.list",
+        put: "clouds.services.nosql.items.put",
       },
     },
     database: {
@@ -443,6 +444,14 @@ export const endpointRegistry: EndpointRegistry = new Map([
     {
       path: "/clouds/:cloud/services/nosql/resources/:id/items",
       method: "GET",
+      telemetry: { service: "cloud-proxy" },
+    },
+  ],
+  [
+    apiEndpointKeys.clouds.nosql.items.put,
+    {
+      path: "/clouds/:cloud/services/nosql/resources/:id/items",
+      method: "POST",
       telemetry: { service: "cloud-proxy" },
     },
   ],
